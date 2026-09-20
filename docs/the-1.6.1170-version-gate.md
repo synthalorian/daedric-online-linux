@@ -72,7 +72,9 @@ What each depot holds (verified sizes):
 
 **Step 3 — merge the depots into the install** (the "paste into your Skyrim
 folder" step Windows guides reference — on Linux the console drops them in a
-separate tree, so merging is mandatory):
+separate tree, so merging is mandatory; paths shown are the native-client
+layout — Flatpak Steam keeps everything under
+`~/.var/app/com.valvesoftware.Steam/.local/share/Steam/`):
 
 ```bash
 GAME="$HOME/.local/share/Steam/steamapps/common/Skyrim Special Edition"

@@ -32,13 +32,45 @@ alone.
 
 ---
 
+## Distro portability
+
+Yes — every step here is distro-agnostic in principle. The whole flow is
+Steam client + Proton + game-folder mechanics: no kernel features, no init
+systems, no distro packaging. Verified live on **CachyOS (Arch, KDE Plasma 6,
+Wayland)**; any mainstream Linux with Steam + Proton support should follow
+exactly the same path. The only distro-dependent choices are *install
+methods*:
+
+| Component | Install on any distro |
+|---|---|
+| Steam | official client (native or Flatpak) — must be running for the Steam bridge (Step 5) and the console (Step 7) |
+| GE-Proton11-7 | manual download to `~/.local/share/Steam/compatibilitytools.d/` — no packaging involved, identical on every distro |
+| umu-launcher | Flathub, or the distro's package where available (AUR on Arch) |
+
+Caveats:
+
+- **Flatpak Steam**: paths shift under `~/.var/app/com.valvesoftware.Steam/.local/share/Steam` and the console command becomes
+  `flatpak run com.valvesoftware.Steam steam://open/console`. That's the one
+  place paths differ — `scripts/downgrade-1.6.1170.sh` auto-discovers both
+  native and Flatpak Steam roots, so the Step 7 script needs zero edits either
+  way.
+- **Base tools**: the flow needs `rsync`, `python3` (present on every
+  mainstream distro) and GNU `strings` (`binutils`) for the version check —
+  the script degrades to md5-only verification if `strings` is missing.
+- **Desktop environment**: the Step 9 shortcut uses `.desktop` paths that work
+  on any DE; the values shown are just this machine's example.
+- **Linux-only by design**: macOS and Windows use different Steam depot
+  layouts and client paths — this is the Linux path, full stop.
+
+---
+
 ## Prerequisites
 
 | Thing | Version / Path |
 |---|---|
-| OS | CachyOS (Arch-based), KDE Plasma 6, Wayland + XWayland |
+| OS | any Linux with Steam — verified live on CachyOS (Arch, KDE Plasma 6, Wayland); see Distro portability above |
 | Steam | installed at `~/.local/share/Steam`, running |
-| umu-launcher | 1.4.3 (`umu-run`) |
+| umu-launcher | 1.4.3 (`umu-run`; Flathub or distro package — see Distro portability) |
 | GE-Proton | **GE-Proton11-7** at `~/.local/share/Steam/compatibilitytools.d/GE-Proton11-7-x86_64` |
 | Skyrim SE | ends at **1.6.1170** (exe FileVersion `1.6.1170.0`, size **37157144**). Start from any build — the launcher sync (Step 6) pulls the 1.6.1170 data and the Steam-console install (Step 7) completes the pin with pristine files: the build with the working textures. Steam's Aug-2026 auto-update (1.7.104) is handled by the same flow |
 | Mods | Vortex-installed collection (115 mods) in the game `Data/` folder |
