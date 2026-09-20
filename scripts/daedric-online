@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Daedric Online launcher — Blackclaw hardened v4 (GE Proton / umu)
+# Daedric Online launcher — hardened v4 (GE Proton / umu)
 #
 # Battle history:
 #  v1: pkill SIGTERM stale instances -> triggered graceful quit -> 1.3.61

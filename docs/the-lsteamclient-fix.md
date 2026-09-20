@@ -110,4 +110,3 @@ umu-run "Daedric Online.exe" --no-sandbox
 ```
 
 The seam between "launcher fine" and "game dead" is exactly this env var.
-**The shield holds.** ⚫🦞
