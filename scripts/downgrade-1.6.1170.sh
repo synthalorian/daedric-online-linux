@@ -15,9 +15,9 @@
 # touches the exe. This script replaces the data with pristine depot files and
 # pins the exe — the resulting build is the one with working textures.
 #
-# Fully portable — auto-discovers the Steam root, library folders, game
-# install, appmanifest and console depot downloads. No hardcoded machine
-# paths.
+# Fully portable — auto-discovers the Steam root (native or Flatpak), library
+# folders, game install, appmanifest and console depot downloads. No hardcoded
+# machine paths. Linux-only by design (depot layout differs on macOS/Windows).
 #
 # Prereq — download the three 1.6.1170 depots via the Steam console (one at a
 # time, wait for each; the manifest IDs pin the exact 1.6.1170 build):
