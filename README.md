@@ -347,6 +347,7 @@ this repo) is the hardened v4:
 | Textures grey/black; `N textures failed to load` in EngineFixes.log | launcher's own download corrupted LZ4 DDS blocks in the textures BSAs | run Step 7 (`scripts/downgrade-1.6.1170.sh`) — or Steam Verify if the build is already correct — then `scripts/bsa-check.py` to confirm (never the launcher's repair) |
 | Modded armor invisible / red-green triangles, vanilla clean, `EngineFixes.log` silent | case war — mod archives ship `Textures/`/`Meshes/` capital, NIFs request lowercase, Linux filesystems are case-sensitive | `bash scripts/case-normalize.sh` (mirrors loose files to lowercase paths; idempotent, reversible). See `docs/the-linux-case-war.md` |
 | Red triangle + white `!` (missing diffuse) or green triangle (missing envmap) after the case fix | the texture exists nowhere — not loose, not in any BSA (the missing-texture board) | `bash scripts/bsa-names.sh` + `python3 scripts/true-missing.py` to list the board; clear entries only from real owned archives (extract-only where the base mod must not install). See `docs/the-missing-texture-board.md` |
+| Armor renders as a placeholder (bare body / error mesh) but every texture on its meshes exists | mesh-side case war — Sentinel esps reference cap roots (`NordWar\SonsOfSkyrim\...`), the deploy pipeline lowercased every loose file, and loose lookups are case-EXACT | `python3 scripts/mesh-case-deploy.py` (ref-driven reverse mirror: hardlinks each esp-referenced `.nif` at the exact case from its lowercase twin; idempotent). See Phase 4 in `docs/the-missing-texture-board.md` |
 | Whole mods absent (armor mod just doesn't exist in game) | installer-option folders deployed raw into `Data/` (Vortex never ran the mod's installer) | reinstall those mods in Vortex and pick the options — launcher closed; see `docs/the-linux-case-war.md` |
 | Game back on 1.7.x after a successful downgrade | launched via Steam client, or Verify clicked | re-run the Step 7 script; keep AutoUpdateBehavior=2, launcher-only entry point |
 | "N mod files don't match the server" (e.g. CBBE 3BA `3BBB.esp` / `RaceMenuMorphsCBBE.esp`, "was edited", "different version") | launcher verifies tracked esp files against its bundled asar manifest (per-file sha256, canonical archive by md5); a Vortex reinstall with different installer options changed the bytes | extract the manifest-pinned archive entries, hash-verify, patch `Data/` **and** Vortex staging; see `docs/the-mod-verification-gate.md` |
@@ -387,10 +388,11 @@ this repo) is the hardened v4:
 | `~/.local/bin/daedric-online` | the KDE-shortcut launch script (v4) |
 | `~/.local/share/Steam/ubuntu12_32/steamapps/content/app_489830/` | the 1.6.1170 console depot downloads — merge source for Step 7; keep forever |
 | `~/.local/share/Steam/steamapps/appmanifest_489830.acf` | `AutoUpdateBehavior=2` — the version-hold that stops Steam re-updating |
-| `docs/the-missing-texture-board.md` | the layer-3 board: staged-never-deployed rescue, mask rescue, `metalic_e` cubemap chain of custody, sealed-gap families |
+| `docs/the-missing-texture-board.md` | the layer-3 board: staged-never-deployed rescue, mask rescue, `metalic_e` cubemap chain of custody, phase-4 mesh-side case war, sealed-gap families |
 | `docs/the-option-reinstall-list.md` | installer-option mods to reinstall via Vortex + field log of the rescue rounds |
 | `scripts/true-missing.py`, `scripts/bsa-names.sh` | the board audit: NIF refs vs loose+BSA coverage → true-missing/risky reports |
 | `scripts/deploy-staged-textures.py` | hardlink/copy deployer for staging-present textures (case-exact, idempotent) |
+| `scripts/mesh-case-deploy.py` | ref-driven reverse case mirror: materializes every esp-referenced `.nif` at exact case from its lowercase twin; reports true gaps |
 
 ## Credits / war history
 
@@ -433,3 +435,12 @@ this repo) is the hardened v4:
   Tooling + full chain of custody: `scripts/true-missing.py`,
   `scripts/bsa-names.sh`, `scripts/deploy-staged-textures.py`,
   `docs/the-missing-texture-board.md`, `docs/the-option-reinstall-list.md`.
+- Mesh-side case war (phase 4): textures were clean, but the worn armor still
+  rendered as a placeholder — Sentinel's esps reference capital mesh roots
+  (`NordWar\SonsOfSkyrim\...`) while this setup lowercases every deployed
+  loose file, and loose lookups are case-EXACT. Cross-scanned the six
+  Sentinel esps (1,399 `.nif` refs): 1,175 deployable hardlink twins
+  materialized at exact case (`scripts/mesh-case-deploy.py`), 83 real gaps
+  (vanilla-root elven/glass/ebony replacer meshes that exist in no owned
+  archive). Worn Windhelm guard set (Sentinel - City Guards.esp forms
+  FE00C816–C81B) now resolves end-to-end.
