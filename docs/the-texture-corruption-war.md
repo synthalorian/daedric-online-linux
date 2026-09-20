@@ -48,13 +48,25 @@ archive table itself was never touched.
 - The launcher's overlay manifest (`DaedricData/overlay-manifest.json`) tracks
   **zero** vanilla BSA entries. That one fact makes the fix trivial:
 
-## The fix: Steam Verify Integrity (CDN is clean, launcher never notices)
+## The fix: the Step 7 console install (Steam Verify as equivalent)
 
-Steam > Skyrim SE > Properties > Installed Files > **Verify integrity of
-game files**. Steam re-downloads the BSAs pristine from its CDN; because the
-launcher overlay tracks no vanilla BSAs, the launcher doesn't care.
+The launcher's overlay manifest (`DaedricData/overlay-manifest.json`) tracks
+**zero** vanilla BSA entries. That one fact makes the fix trivial: any
+pristine-source restore of the BSAs is invisible to the launcher.
 
-Post-verify verification (all live numbers):
+**In the README flow, the fix is Step 7** — the Steam-console
+`download_depot` of the three 1.6.1170 manifests merged by
+`scripts/downgrade-1.6.1170.sh`. That merge re-installs the textures BSAs
+from CDN-pristine 1.6.1170 depots (healing exactly the entries the launcher
+corrupted) **and** pins the exe — one step, version + textures together. The
+console-installed build is the one with working textures.
+
+If you only need the textures (build already correct), Steam > Skyrim SE >
+Properties > Installed Files > **Verify integrity of game files** is the
+equivalent: Steam re-downloads the BSAs pristine from its CDN and the launcher
+overlay never notices.
+
+Post-fix verification (all live numbers):
 
 - **9/9** textures BSAs: **0 garbage**, every entry `wrapped-dds`
 - **1,296/1,296** known-broken candidates resolve byte-clean vs the pristine
@@ -73,8 +85,9 @@ python3 scripts/bsa-check.py "$GAME/Data/Skyrim - Textures"*.bsa
 # expect: every line 'wrapped-dds' counts only, zero 'garbage'
 ```
 
-Garbage again? Re-verify via Steam, then re-run the downgrade hold
-(`scripts/downgrade-1.6.1170.sh` — re-merges CDN-clean 1.6.1170 depots).
+Garbage again? Rerun the Step 7 console install (`scripts/downgrade-1.6.1170.sh`
+— re-merges CDN-clean 1.6.1170 depots), or Steam Verify if the build is
+already correct.
 
 ## Red herrings (so you don't chase ghosts)
 
