@@ -57,6 +57,13 @@ Caveats:
 - **Base tools**: the flow needs `rsync`, `python3` (present on every
   mainstream distro) and GNU `strings` (`binutils`) for the version check —
   the script degrades to md5-only verification if `strings` is missing.
+- **Case-sensitive filesystems**: Skyrim meshes reference loose textures with
+  lowercase paths and BSA lookups are case-insensitive, but mod archives often
+  ship `Textures/`/`Meshes/` capitalized — Windows ignores that, Linux does
+  not. If modded armor is invisible or shows red/green error triangles while
+  vanilla is fine, run `scripts/case-normalize.sh` (mirrors every loose file
+  to its lowercase path; idempotent). Full forensics:
+  `docs/the-linux-case-war.md`.
 - **Desktop environment**: the Step 9 shortcut uses `.desktop` paths that work
   on any DE; the values shown are just this machine's example.
 - **Linux-only by design**: macOS and Windows use different Steam depot
@@ -338,6 +345,8 @@ this repo) is the hardened v4:
 | Launcher window blank or CEF crash | sandbox under wine | always pass `--no-sandbox` |
 | Version gate red / "game version not supported" | the exe is still a Steam build (1.7.x) — the launcher sync never replaces it | Step 7: `download_depot` the three manifests, then `scripts/downgrade-1.6.1170.sh` |
 | Textures grey/black; `N textures failed to load` in EngineFixes.log | launcher's own download corrupted LZ4 DDS blocks in the textures BSAs | run Step 7 (`scripts/downgrade-1.6.1170.sh`) — or Steam Verify if the build is already correct — then `scripts/bsa-check.py` to confirm (never the launcher's repair) |
+| Modded armor invisible / red-green triangles, vanilla clean, `EngineFixes.log` silent | case war — mod archives ship `Textures/`/`Meshes/` capital, NIFs request lowercase, Linux filesystems are case-sensitive | `bash scripts/case-normalize.sh` (mirrors loose files to lowercase paths; idempotent, reversible). See `docs/the-linux-case-war.md` |
+| Whole mods absent (armor mod just doesn't exist in game) | installer-option folders deployed raw into `Data/` (Vortex never ran the mod's installer) | reinstall those mods in Vortex and pick the options — launcher closed; see `docs/the-linux-case-war.md` |
 | Game back on 1.7.x after a successful downgrade | launched via Steam client, or Verify clicked | re-run the Step 7 script; keep AutoUpdateBehavior=2, launcher-only entry point |
 
 ## Operational safety rules (learned the hard way)
@@ -393,3 +402,9 @@ this repo) is the hardened v4:
   blocks in the textures BSAs; the Step 7 console-depot install heals them
   with CDN-clean data the launcher overlay never tracks (Steam Verify is the
   build-agnostic equivalent — `docs/the-texture-corruption-war.md`).
+- Linux case war: once the BSAs were pristine, the remaining broken mod
+  textures turned out to be case sensitivity — capitalized `Textures/`/
+  `Meshes/` roots from Windows-packaged mods that Linux filesystems can't
+  answer with lowercase NIF requests. Fixed with `scripts/case-normalize.sh`
+  (lowercase hardlink mirrors; idempotent) plus reinstalling mods whose
+  installer-option folders had been deployed raw (`docs/the-linux-case-war.md`).
