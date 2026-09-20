@@ -348,13 +348,16 @@ this repo) is the hardened v4:
 | Modded armor invisible / red-green triangles, vanilla clean, `EngineFixes.log` silent | case war — mod archives ship `Textures/`/`Meshes/` capital, NIFs request lowercase, Linux filesystems are case-sensitive | `bash scripts/case-normalize.sh` (mirrors loose files to lowercase paths; idempotent, reversible). See `docs/the-linux-case-war.md` |
 | Whole mods absent (armor mod just doesn't exist in game) | installer-option folders deployed raw into `Data/` (Vortex never ran the mod's installer) | reinstall those mods in Vortex and pick the options — launcher closed; see `docs/the-linux-case-war.md` |
 | Game back on 1.7.x after a successful downgrade | launched via Steam client, or Verify clicked | re-run the Step 7 script; keep AutoUpdateBehavior=2, launcher-only entry point |
+| "N mod files don't match the server" (e.g. CBBE 3BA `3BBB.esp` / `RaceMenuMorphsCBBE.esp`, "was edited", "different version") | launcher verifies tracked esp files against its bundled asar manifest (per-file sha256, canonical archive by md5); a Vortex reinstall with different installer options changed the bytes | extract the manifest-pinned archive entries, hash-verify, patch `Data/` **and** Vortex staging; see `docs/the-mod-verification-gate.md` |
 
 ## Operational safety rules (learned the hard way)
 
 1. **Never hand-modify the game folder.** The launcher gates on a foreign-file
-   list and on `SkyrimSE.exe` size 37157144. Vortex handles the mods. The one
-   sanctioned exception is the Step 7 console install — it re-arms the exact
-   vanilla 1.6.1170 files (including the exe) the launcher checks for.
+   list and on `SkyrimSE.exe` size 37157144. Vortex handles the mods. The two
+   sanctioned exceptions: the Step 7 console install (re-arms the exact
+   vanilla 1.6.1170 files the launcher checks for), and the mod-verification
+   gate (hash-verified replacement of canonically-pinned esp files — read
+   `docs/the-mod-verification-gate.md` first).
 2. **Never run distro wine against a umu prefix.** Always `umu-run` with the
    same `PROTONPATH`/env the prefix was created under.
 3. **Never `pkill -f` a string that appears in your own command line.** Use
@@ -377,7 +380,7 @@ this repo) is the hardened v4:
 |---|---|
 | `~/.local/share/Steam/compatibilitytools.d/GE-Proton11-7-x86_64` | the working Proton |
 | `~/Games/umu/umu-489830` | umu prefix holding the launcher |
-| `.../drive_c/Program Files/DaedricOnline/` | the launcher (launch cwd) |
+| `.../drive_c/Program Files/DaedricOnline/` | the launcher (launch cwd); `resources/app.asar` inside it holds the server's mod manifest — the verification gate's contract |
 | `.../users/steamuser/Documents/My Games/Skyrim Special Edition/SkyrimPrefs.ini` | resolution INI |
 | `.../users/steamuser/Documents/My Games/Skyrim Special Edition/SKSE/` | SKSE + plugin logs, crash logs |
 | `~/.local/bin/daedric-online` | the KDE-shortcut launch script (v4) |
@@ -408,3 +411,10 @@ this repo) is the hardened v4:
   answer with lowercase NIF requests. Fixed with `scripts/case-normalize.sh`
   (lowercase hardlink mirrors; idempotent) plus reinstalling mods whose
   installer-option folders had been deployed raw (`docs/the-linux-case-war.md`).
+- Mod verification gate: the launcher verifies tracked esp files against a
+  server manifest bundled in its `app.asar` (per-file sha256 + `entry` paths
+  inside a canonically-md5'd archive). A CBBE 3BA reinstall with non-default
+  installer options tripped it ("2 mod files don't match the server" —
+  `3BBB.esp` + `RaceMenuMorphsCBBE.esp`, fileId 600100). Fixed by extracting
+  the manifest-pinned archive entries, hash-verifying, and patching `Data/`
+  plus Vortex staging (`docs/the-mod-verification-gate.md`).
