@@ -229,6 +229,63 @@ no `Marker_error`, no null-deref in the update pass. The server can hand
 any vanilla item and the mesh side will answer. The 15,419 BSA-resolved
 "gaps" are the vanilla game working as designed and stay untouched.
 
+## Phase 5.1 — regression: the actor tree rollback (crash2, 366 twins reverted)
+
+### Symptom
+
+Immediately after Phase 5 (first relaunch), the game no longer loaded in at
+all: `crash2.txt`, uptime **20.9 s**, died in the **FaceGen head build**
+before the world even spawned. CrashLogger: `MaleHeadIMF` (the morph-capable
+head TriShape), `BSFaceGenBaseMorphExtraData` in RSI, `BGSHeadPart
+MaleHeadNord` + `HumanBeardLong16_1bit` + `TESRace Nord` (the player's face
+chain), `QueuedHead` + `BSTaskManagerThread` (the async head-build task),
+crash at `SkyrimSE.exe+04316FB` (`mov r12d,[rbp+0x40]` with `rbp=0x10` —
+near-null morph walk, `RDI=0`), **`skee64.dll` (RaceMenu) mid-chain**.
+Same actor, same load order, dies during head build — the 03:04 session had
+built this exact head fine 11 s earlier (its dump shows the completed
+`BSFaceGenNiNodeSkinned` + beard geometry + skeleton). Probe confirms the
+delta: load event at 16.1 s, then nothing — the server never equipped gear.
+
+### Root cause: over-broad Phase 5
+
+Phase 5's 1,200 twins were correct for **armor/weapon refs** but over-reached
+into the **actor tree**. `meshes/Actors/Character/Character Assets/` — heads,
+`EyesMale*`, `FaceParts/Eye*`, hair, body meshes, skeletons — all got
+exact-case twins. A hardlink twin is byte-identical, so it only *changes*
+behavior where the engine previously **fell back to the vanilla BSA** on an
+exact-case miss. For the head build, Phase 5 flipped that fallback:
+
+- **Before (03:04, known-good):** exact-case lookup missed → **BSA vanilla
+  eyes/faceparts loaded** → FaceGen + RaceMenu built the head fine.
+- **After (crash2):** exact case now *hits* the mirror twin → the **modded
+  lowercase content loads** (the 2019-dated eye meshes are mod content —
+  `TheEyesOfBeauty` / `Improved Eyes` era files) → the FaceGen morph walk
+  (RaceMenu hooking it) dereferences null morph data → crash.
+
+Proof it wasn't armor: plugin lists and SKSE plugin dumps are byte-identical
+between the two sessions; the only filesystem delta is Phase 5's deploy
+(ctimes stamped 03:40). The armor crater twins (`meshes/Armor/Iron/...`)
+were untouched by the rollback — they live outside `meshes/Actors/`.
+
+### The rollback (Phase 5.1)
+
+Removed the exact-case twins under `meshes/Actors/` only — **366 hardlinks
+unlinked** (0 failures), restoring the exact 03:04 actor resolution state.
+Lowercase sources untouched; armor/weapon twins (885) kept; crater paths
+verified intact (`CuirassLight_1.nif` 819098/1846412 B, Northern Iron
+ArmorF/ArmorM present). The FaceGen path is back on BSA vanilla for head
+parts — the state that built this head successfully before.
+
+### Hardening
+
+`mesh-case-deploy.py` now **excludes the entire actor tree**
+(`meshes/actors/` fragment) — re-runs against the masters cannot recreate
+the regression. Dry-run after hardening: 0 deployable, 990 excluded, armor
+front still fully deployable when new gaps appear. The actor tree is a
+"BSA resolves it, leave it alone" zone: modded loose content under those
+paths only ever served the armor refits (which reference their own
+`Armor_Replacer`/`Armor` paths) — not the engine's own exact-case lookups.
+
 ## The remaining board — sealed gaps (do not fabricate)
 
 These families are real content gaps. They are documented and left as-is;

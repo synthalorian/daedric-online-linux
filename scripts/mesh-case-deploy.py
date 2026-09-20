@@ -41,6 +41,20 @@ DEFAULT_ESPS = [
 PAT = re.compile(rb'[A-Za-z0-9_ .\\/-]+\.nif')
 MASTERS = ("skyrim.esm", "update.esm", "dawnguard.esm",
            "hearthfires.esm", "dragonborn.esm")
+# Paths whose exact-case mirrors are FORBIDDEN: the entire actor tree
+# (creatures AND the player FaceGen/head-build zone). Phase 5 mirroring the
+# Character Assets family flipped BSA-vanilla -> modded-loose content under
+# exact-case refs and crashed the FaceGen head build (RaceMenu morph walk,
+# null morph data). Known-good state = NO twins under meshes/Actors/: the
+# engine falls back to the vanilla BSA for these, which is what worked,
+# and creature skeletons are the same shadow class (NPC load-in risk).
+EXCLUDE_FRAGMENTS = (
+    "meshes/actors/",   # whole actor tree: creatures + player head/body/face
+)
+
+def excluded(fp):
+    low = fp.lower()
+    return any(f in low for f in EXCLUDE_FRAGMENTS)
 
 def harvest_refs(data, esps):
     """All unique .nif paths referenced by the esps, backslash normalized.
@@ -76,9 +90,12 @@ def main():
     refs = harvest_refs(DATA, esps)
     print(f"scanned {len(esps)} esps -> {len(refs)} unique mesh refs")
 
-    deployable, gaps, present = [], [], []
+    deployable, gaps, present, excluded_refs = [], [], [], []
     for ref in sorted(refs):
         fp = full_path(ref)
+        if excluded(fp):
+            excluded_refs.append(fp)
+            continue
         # lowercase only the RELATIVE part — the DATA root itself is case-kept
         rel = fp.replace("/", os.sep)
         exact = os.path.join(DATA, rel)
@@ -92,6 +109,7 @@ def main():
     print(f"exact-case present : {len(present)}")
     print(f"deployable twins   : {len(deployable)}")
     print(f"REAL GAPS (nowhere): {len(gaps)}")
+    print(f"excluded (act/build family): {len(excluded_refs)}")
 
     if args.dry_run:
         print("\n[dry-run] would deploy:")
