@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Daedric Online launcher — Blackclaw hardened v4 (GE Proton / umu)
+#
+# Battle history:
+#  v1: pkill SIGTERM stale instances -> triggered graceful quit -> 1.3.61
+#      updater force-ran a NEW instance mid-launch -> two-process race ->
+#      JS error (and force-run spawns carry closed stdio fds -> EBADF at
+#      createWriteableStdioStream -> uncaughtException dialog).
+#  v2: + single-instance guard (never kill a healthy instance; if one is
+#      alive, bail out silently — the user already has it on screen).
+#      + SIGKILL-only cleanup of strays (no graceful quit => updater can't
+#      fire from a kill). + fresh wineserver per launch (stale 18:11
+#      wineserver was attaching weird stdio to new processes). + stdio
+#      redirected to a logfile so Node's stdio wrapping ALWAYS gets valid
+#      fds (EBADF-proof).
+#  v3: plain-wine prefix (WINEPREFIX=$HOME/Games/daedric-online) — worked,
+#      but the spawned game could never reach Steam (S_API wall) and the
+#      whole stack was outside the Steam/umu runtime.
+#  v4: FULL CROSSOVER — everything runs through umu + GE-Proton11-7 inside
+#      the migrated umu prefix, so the launcher AND the game it spawns share
+#      one wineserver + one Steam bridge.
+#
+#  THE FIX THAT MATTERS (2026-09-19):
+#  Without UMU_USE_STEAM=1, GE-Proton's proton script appends
+#  WINEDLLOVERRIDES=lsteamclient=d ("d" = DISABLE) for umu launches, the
+#  game's SteamAPI_Init falls back to loading the raw Windows
+#  steamclient64.dll (missing tier0_s64.dll / vstdlib_s64.dll deps) and
+#  dies silently. UMU_USE_STEAM=1 keeps lsteamclient enabled and routes
+#  through GE's builtin steam.exe shim: "[S_API] Loaded steamclient64.dll OK".
+#  See repo README for the full writeup.
+set -u
+
+PREFIX="$HOME/Games/umu/umu-489830"
+GE="$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-7-x86_64"
+LAUNCHER_DIR="$PREFIX/drive_c/Program Files/DaedricOnline"
+LOG="$HOME/.local/share/daedric-online/launcher-stdio.log"
+
+# umu-run resolves the bare exe name against the CWD inside the prefix.
+# (Passing the full "C:\Program Files\..." path makes umu say
+# "WARNING: Executable not found" — cd in, pass the bare name.)
+EXE="Daedric Online.exe"
+
+# --- Single-instance guard: if the launcher is already alive, do NOTHING.
+# Killing a healthy instance is what started every war. The user clicks the
+# icon, sees the window already there, moves on.
+if pgrep -f "$EXE" >/dev/null 2>&1; then
+    exit 0
+fi
+
+# --- SIGKILL-only cleanup of strays/zombies. Never SIGTERM: SIGTERM is a
+# graceful quit to the launcher, which fires quitAndInstall -> updater
+# force-run race. Only touch OUR launcher's processes — never pkill -f a
+# string that also appears in our own command line (chunked kill lists).
+for p in $(pgrep -f "$EXE" 2>/dev/null); do
+    kill -9 "$p" 2>/dev/null
+done
+sleep 1
+
+mkdir -p "$(dirname "$LOG")"
+
+# The proven launch environment (2026-09-19, everything verified live):
+cd "$LAUNCHER_DIR" || exit 1
+export GAMEID=umu-489830
+export UMU_ID=umu-489830
+export UMU_USE_STEAM=1                          # <-- THE fix
+export PROTONPATH="$GE"
+export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
+export SteamAppId=489830
+export SteamGameId=489830
+# WINEDEBUG deliberately not -all: keep the S_API verdict visible in the log.
+
+# stdio -> logfile. Guarantees fd 1/2 are always valid regular files, so
+# Electron's createWriteableStdioStream can never hit EBADF. Detach so the
+# launcher outlives this script.
+nohup umu-run "$EXE" --no-sandbox >> "$LOG" 2>&1 &
+disown
+exit 0
