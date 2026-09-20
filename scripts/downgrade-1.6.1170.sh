@@ -9,6 +9,12 @@
 # the pinned depots back over the install and flips AutoUpdateBehavior so
 # Steam can't quietly upgrade you again.
 #
+# Run AFTER the launcher's client sync (README Step 6): that sync is what
+# downgrades the game data (its internal downloader is pinned to the 1.6.1170
+# manifests) but it corrupts LZ4 DDS blocks in the textures BSAs and never
+# touches the exe. This script replaces the data with pristine depot files and
+# pins the exe — the resulting build is the one with working textures.
+#
 # Fully portable — auto-discovers the Steam root, library folders, game
 # install, appmanifest and console depot downloads. No hardcoded machine
 # paths.

@@ -5,6 +5,14 @@ Steam's Aug-2026 update shipped a new binary version, and every Skyrim SP
 server on the 1.6.1170 modlist standard suddenly failed the gate. This is how
 to hold the line.
 
+**Where this fits in the README flow:** this step runs **after** the
+launcher's client sync (README Step 6). That sync *is* the downgrade of the
+game data — the launcher's internal downloader is pinned to the 1.6.1170
+manifests (its download sizes match the 1.6.1170 depots exactly). But the
+sync corrupts LZ4 blocks in the textures BSAs and never replaces the exe, so
+the console install below is what completes the pin with pristine files —
+**the console-installed build is the one with working textures**.
+
 ## The symptom
 
 The launcher refuses the install with a red version banner, or the check
@@ -78,6 +86,10 @@ cp -a  "$C/depot_489833/SkyrimSE.exe" "$GAME/SkyrimSE.exe"
 
 This overwrites the 1.7.104 files with CDN-pristine 1.6.1170 — the merge is
 the sanctioned way to touch the game folder (see the README's rule #1 nuance).
+It also overwrites the corrupted BSAs the launcher's sync wrote — the same
+merge that pins the version is the texture repair. Re-arm any time with
+`scripts/downgrade-1.6.1170.sh` (idempotent: re-merges depots + re-holds the
+manifest + prints the resulting exe version).
 
 **Step 4 — hold Steam's auto-update** so it can't undo the pin:
 
@@ -97,9 +109,6 @@ EOF
 - **never click Verify Integrity** in Steam (Steam Properties) — re-downloads 1.7.104
 - **never launch the game via the Steam client** — Steam updates on manual
   launch; the launcher (umu path) must be the only entry point
-
-Re-arm any time with `scripts/downgrade-1.6.1170.sh` (idempotent: re-merges
-depots + re-holds the manifest + prints the resulting exe version).
 
 ## Check it yourself
 

@@ -21,6 +21,15 @@ bit — launch with **`UMU_USE_STEAM=1`** so GE keeps its `lsteamclient` bridge
 enabled. Without that env var, the game dies silently at
 `SteamAPI_Init(): Failed to load module 'C:\Program Files (x86)\Steam\steamclient64.dll'`.
 
+**The build question — the game must end at 1.6.1170.** The launcher's client
+sync (Step 6) *is* the downgrade: its internal downloader is pinned to the
+1.6.1170 manifests and writes that build's data into the game folder. That
+same downloader has one known bug (it corrupts LZ4 blocks in the textures
+BSAs) and it never touches the exe — so a Steam-console depot install (Step
+7) follows to complete the pin with pristine files. **The Step 7 build is the
+one with the working textures.** Don't settle for the launcher-synced data
+alone.
+
 ---
 
 ## Prerequisites
@@ -31,48 +40,17 @@ enabled. Without that env var, the game dies silently at
 | Steam | installed at `~/.local/share/Steam`, running |
 | umu-launcher | 1.4.3 (`umu-run`) |
 | GE-Proton | **GE-Proton11-7** at `~/.local/share/Steam/compatibilitytools.d/GE-Proton11-7-x86_64` |
-| Skyrim SE | **1.6.1170** (exe FileVersion `1.6.1170.0`, size **37157144**). Steam's Aug-2026 auto-update re-pulls 1.7.104 and slams the version gate — if that happened, run Step 0 first |
+| Skyrim SE | ends at **1.6.1170** (exe FileVersion `1.6.1170.0`, size **37157144**). Start from any build — the launcher sync (Step 6) pulls the 1.6.1170 data and the Steam-console install (Step 7) completes the pin with pristine files: the build with the working textures. Steam's Aug-2026 auto-update (1.7.104) is handled by the same flow |
 | Mods | Vortex-installed collection (115 mods) in the game `Data/` folder |
 | Daedric launcher | the server launcher exe + its `AppData` config |
 
 > **Never hand-modify the game folder.** The launcher gates on a foreign-file
 > list (see its `dist/main.js`) and on the exact `SkyrimSE.exe` size. Your
-> mods go in via Vortex, not by hand. The one sanctioned exception: restoring
-> vanilla 1.6.1170 over a Steam auto-update (Step 0) — that merge removes
-> foreign files and re-installs the exact exe the launcher checks for.
+> mods go in via Vortex, not by hand. The one sanctioned exception: the Step 7
+> console install, which re-arms the exact vanilla 1.6.1170 files (including
+> the exe) the launcher checks for.
 
 ---
-
-## Step 0 — Pin Skyrim SE to 1.6.1170 (only if Steam updated you)
-
-The launcher hard-requires exe FileVersion **1.6.1170.0**. Check first:
-
-```bash
-strings -el "$HOME/.local/share/Steam/steamapps/common/Skyrim Special Edition/SkyrimSE.exe" | grep -A1 '^FileVersion$'
-#   1.6.1170.0  → skip to Step 1
-#   1.7.x       → Steam's Aug-2026 auto-update landed; the launcher will refuse the
-#                 install (REQUIRED_RUNTIME = "1.6.1170" in its main.js)
-```
-
-If it's 1.7.x, pull the exact 1.6.1170 depots via the Steam console
-(`steam steam://open/console`, one at a time, wait for each):
-
-```
-download_depot 489830 489831 8442952117333549665
-download_depot 489830 489832 8042843504692938467
-download_depot 489830 489833 1914580699073641964
-```
-
-then merge + hold with the repo script (idempotent re-arm):
-
-```bash
-bash scripts/downgrade-1.6.1170.sh
-```
-
-Two permanent rules after a downgrade: **never** launch the game via the
-Steam client, **never** click Verify Integrity — both re-pull 1.7.104 and
-slam the gate shut. The launcher is the only entry point. Full mechanism and
-depot breakdown: `docs/the-1.6.1170-version-gate.md`.
 
 ## Step 1 — Install GE-Proton11-7
 
@@ -208,31 +186,77 @@ API, and the main menu comes up.
    another server").
 2. If it shows a verify panel, ignore the "missing" list — its own detail
    line says `"Missing because the client-file sync above didn't finish."`
-3. The launcher downloads **Client files 4.99.596** (grab a coffee; the first
-   sync pulls textures). Status column goes `WORKING` → `READY`.
+3. The launcher downloads **Client files 4.99.596** (grab a coffee). This sync
+   *is* the downgrade — the launcher's internal downloader is pinned to the
+   1.6.1170 manifests (its download sizes match the 1.6.1170 depots exactly)
+   and writes that build's data into the game folder. Status column goes
+   `WORKING` → `READY`.
 4. When the status shows `CLIENT READY / BUILD 4.99.596`, the bottom-right
    button becomes **LAUNCH**. Click it.
-5. `skse64_loader.exe` spawns with `steam exe` detected, hooks
-   `SkyrimSE.exe` 1.6.1170, and the game opens.
+5. `skse64_loader.exe` spawns, hooks `SkyrimSE.exe`, and the game opens — if
+   the version gate is still red instead, that's expected at this point: run
+   Step 7 first, then return here.
 
 Keep the launcher open while you play — the launcher's own screen says so.
 
-**Texture integrity (read once):** that first client sync is the one step
-this launcher historically corrupts — its built-in downloader mangles LZ4 DDS
-blocks inside the vanilla `Skyrim - Textures*.bsa` files, and its "repair"
-path re-copies the corruption. If textures go grey/black or EngineFixes.log
-reports `N textures failed to load in this session`:
+**Texture integrity (read once):** the same sync that downgrades is also
+this launcher's one known bug — its downloader mangles LZ4 DDS blocks inside
+the vanilla `Skyrim - Textures*.bsa` files it writes, and its "repair" path
+re-copies the corruption. Grey/black textures right after the sync are
+**expected**, not a surprise. The Step 7 console install replaces those BSAs
+with pristine depot files — **the Step 7 build is the one with the working
+textures**. Verify after Step 7:
 
 ```bash
-python3 scripts/bsa-check.py "$GAME/Data/Skyrim - Textures"*.bsa   # any 'garbage' = corrupt
-# fix: Steam > Properties > Installed Files > Verify integrity of game files
-# (CDN is clean; the launcher overlay tracks zero vanilla BSAs, so it can't tell)
+python3 scripts/bsa-check.py "$GAME/Data/Skyrim - Textures"*.bsa   # zero 'garbage' = clean
 ```
 
-Never use the launcher's own repair for vanilla data. Full forensics:
-`docs/the-texture-corruption-war.md`.
+Full forensics: `docs/the-texture-corruption-war.md`.
 
-## Step 7 — Resolution (ultrawide / your desktop)
+## Step 7 — Install clean 1.6.1170 via the Steam console
+
+Do this right after the sync. The sync downgraded the game's data but
+(a) corrupted LZ4 blocks in the textures BSAs and (b) never touched the exe —
+which is why the launcher can still show the version gate red at this point:
+the exe and the BSAs are not yet the pristine 1.6.1170 build. The console
+install completes the pin:
+
+1. Open the Steam console: `steam steam://open/console` (or relaunch with
+   `steam -console`).
+2. Download the three 1.6.1170 depots — one at a time, wait for each to
+   finish. The manifest IDs pin the exact 1.6.1170 build; without them you
+   get the current/latest build (1.7.104 — useless):
+
+   ```
+   download_depot 489830 489831 8442952117333549665
+   download_depot 489830 489832 8042843504692938467
+   download_depot 489830 489833 1914580699073641964
+   ```
+
+3. Merge + hold with the repo script. It is fully portable — auto-discovers
+   the Steam root, library folders, game install and depot downloads (override
+   with `STEAM_ROOT`/`STEAM_LIBRARY`/`GAME`/`C`/`ACF` if it guesses wrong):
+
+   ```bash
+   bash scripts/downgrade-1.6.1170.sh
+   ```
+
+The script re-installs every vanilla file from the pinned depots (healing the
+corrupted BSAs), installs the 1.6.1170 exe (37,157,144 B), and sets
+`AutoUpdateBehavior=2` so Steam can't re-update. **This is the build with the
+working textures.** Confirm:
+
+```bash
+python3 scripts/bsa-check.py "$GAME/Data/Skyrim - Textures"*.bsa   # zero 'garbage'
+strings -el "$GAME/SkyrimSE.exe" | grep -A1 '^FileVersion$'         # 1.6.1170.0
+```
+
+Two permanent rules from here: **never** launch the game via the Steam
+client, **never** click Verify Integrity — both re-pull 1.7.104 and slam the
+gate shut. The launcher is the only entry point. Mechanisms + depot breakdown:
+`docs/the-1.6.1170-version-gate.md`.
+
+## Step 8 — Resolution (ultrawide / your desktop)
 
 The game's resolution lives in the INI **inside the umu prefix**:
 
@@ -253,7 +277,7 @@ for true exclusive fullscreen (on an ultrawide this fixes the title-bar height
 mismatch you get in windowed mode). The game writes this file itself when you
 change resolution in Options → Display, so you can also just do it in-game.
 
-## Step 8 — The launch script (KDE shortcut)
+## Step 9 — The launch script (KDE shortcut)
 
 The `.desktop` entries at
 `~/.local/share/applications/daedric-online.desktop` and
@@ -280,16 +304,16 @@ this repo) is the hardened v4:
 | "8 required mods missing" panel | client-file sync never completed | let the sync finish; panel says so itself |
 | Launcher races / EBADF / updater relaunch | SIGTERM to Electron fires quitAndInstall | SIGKILL-only, chunked kill lists; single-instance guard |
 | Launcher window blank or CEF crash | sandbox under wine | always pass `--no-sandbox` |
-| Version gate red / "game version not supported" | Steam auto-updated the game (1.7.x) | Step 0: depot downgrade + auto-update hold (`scripts/downgrade-1.6.1170.sh`) |
-| Textures grey/black; `N textures failed to load` in EngineFixes.log | launcher's own download corrupted LZ4 DDS blocks in the textures BSAs | Steam Verify Integrity, then `scripts/bsa-check.py` to confirm (never the launcher's repair) |
-| Game back on 1.7.x after a successful downgrade | launched via Steam client, or Verify clicked | re-run Step 0 script; keep AutoUpdateBehavior=2, launcher-only entry point |
+| Version gate red / "game version not supported" | the exe is still a Steam build (1.7.x) — the launcher sync never replaces it | Step 7: `download_depot` the three manifests, then `scripts/downgrade-1.6.1170.sh` |
+| Textures grey/black; `N textures failed to load` in EngineFixes.log | launcher's own download corrupted LZ4 DDS blocks in the textures BSAs | run Step 7 (`scripts/downgrade-1.6.1170.sh`) — or Steam Verify if the build is already correct — then `scripts/bsa-check.py` to confirm (never the launcher's repair) |
+| Game back on 1.7.x after a successful downgrade | launched via Steam client, or Verify clicked | re-run the Step 7 script; keep AutoUpdateBehavior=2, launcher-only entry point |
 
 ## Operational safety rules (learned the hard way)
 
 1. **Never hand-modify the game folder.** The launcher gates on a foreign-file
    list and on `SkyrimSE.exe` size 37157144. Vortex handles the mods. The one
-   sanctioned exception is restoring vanilla 1.6.1170 over a Steam auto-update
-   (Step 0) — that re-arms the exact files the launcher checks for.
+   sanctioned exception is the Step 7 console install — it re-arms the exact
+   vanilla 1.6.1170 files (including the exe) the launcher checks for.
 2. **Never run distro wine against a umu prefix.** Always `umu-run` with the
    same `PROTONPATH`/env the prefix was created under.
 3. **Never `pkill -f` a string that appears in your own command line.** Use
@@ -300,8 +324,9 @@ this repo) is the hardened v4:
    can race the running instance.
 6. **Never let the launcher "repair" or re-download vanilla data** — its own
    depot downloader corrupts LZ4 DDS blocks (`~/Downloads/daedric-dl/`); the
-   "repair" re-copies the corruption. Steam Verify Integrity is the only
-   sanctioned vanilla-data repair.
+   "repair" re-copies the corruption. The Step 7 console install (or Steam
+   Verify if the build is already correct) is the only sanctioned
+   vanilla-data repair.
 7. **Never launch the game via the Steam client, never click Verify Integrity,
    after a downgrade** — both re-pull 1.7.104 and slam the version gate shut.
 
@@ -315,7 +340,7 @@ this repo) is the hardened v4:
 | `.../users/steamuser/Documents/My Games/Skyrim Special Edition/SkyrimPrefs.ini` | resolution INI |
 | `.../users/steamuser/Documents/My Games/Skyrim Special Edition/SKSE/` | SKSE + plugin logs, crash logs |
 | `~/.local/bin/daedric-online` | the KDE-shortcut launch script (v4) |
-| `~/.local/share/Steam/ubuntu12_32/steamapps/content/app_489830/` | the 1.6.1170 console depot downloads — merge source for Step 0; keep forever |
+| `~/.local/share/Steam/ubuntu12_32/steamapps/content/app_489830/` | the 1.6.1170 console depot downloads — merge source for Step 7; keep forever |
 | `~/.local/share/Steam/steamapps/appmanifest_489830.acf` | `AutoUpdateBehavior=2` — the version-hold that stops Steam re-updating |
 
 ## Credits / war history
@@ -328,8 +353,11 @@ this repo) is the hardened v4:
   the exact S_API load failure.
 - Resolution forced to native ultrawide 2560x1080 fullscreen.
 - 1.6.1170 version gate: Steam's Aug-2026 auto-update (1.7.104) broke the
-  launcher's `REQUIRED_RUNTIME = "1.6.1170"` check; pinned via console depot
-  manifests + `AutoUpdateBehavior` hold (`docs/the-1.6.1170-version-gate.md`).
+  launcher's `REQUIRED_RUNTIME = "1.6.1170"` check. The launcher's own client
+  sync pulls the 1.6.1170 data (the downgrade); the Steam-console depot
+  install completes the pin pristinely — exe + BSAs + `AutoUpdateBehavior`
+  hold (`docs/the-1.6.1170-version-gate.md`).
 - Texture corruption war: the launcher's built-in downloader corrupts LZ4 DDS
-  blocks in the textures BSAs; Steam Verify heals CDN-clean data the launcher
-  overlay never tracks (`docs/the-texture-corruption-war.md`).
+  blocks in the textures BSAs; the Step 7 console-depot install heals them
+  with CDN-clean data the launcher overlay never tracks (Steam Verify is the
+  build-agnostic equivalent — `docs/the-texture-corruption-war.md`).
