@@ -158,6 +158,77 @@ elven / glass* — a real content gap, same sealed-gap discipline as the
 texture board. Machine list survives at `TRUE_GAP_OUT` output of
 `mesh-case-deploy.py`. No fabrication; needs a real source archive.
 
+## Phase 5 — the vanilla master front (1,200 twins deployed, crash fix)
+
+### Symptom
+
+Phase 4 shipped, armor *finally rendered* (confirmed in-session), and then
+the game hard-crashed ~32 s in. CrashLogger: two `Marker_error:0` BSTriShapes
++ two `Marker_error` BSFadeNodes in the scene, crash at
+`SkyrimSE.exe+0E24D66` (`mov r12,[rbp+0x20]` with `rbp=0` — null-deref
+walking the error-substitute mesh's empty parent chain). The engine was
+*processing* the two marker substitutes — the classic signature of meshes
+that failed to load at exact case and the error mesh itself tripping the
+update pass.
+
+### Root cause
+
+`Marker_error` is the engine's substitute for a **failed loose mesh load**.
+Both probes (02:44 and the crashed 03:04 session) show the same spawn dance:
+the server strips the starter vanilla Iron set (`00012E46` IronGauntlets,
+`00012E49` IronCuirass, `00012E4B` IronBoots) before equipping Northern
+Iron. Gauntlets and boots resolve exact-case fine — but the cuirass ARMA
+(`IronCuirassAA`) references both gender worn meshes:
+
+- `Armor\Iron\F\CuirassLight_1.nif`
+- `Armor\Iron\Male\CuirassLight_1.nif`
+
+…and both existed on disk **only lowercase** (`armor/iron/f/cuirasslight_1.nif`).
+The engine loads both gender variants per ARMA (biped holds male+female) →
+**two failed loads → exactly the two `Marker_error` substitutes** seen in the
+dump. The 02:44 session carried the same latent failure — masked by the
+placeholder-armor crash that Phase 4 fixed. Phase 4's audit only covered the
+**six Sentinel esps**; `Skyrim.esm`'s own refs were never in scope. The
+vanilla starter set was a case-shadow waiting to fire every session.
+
+A lowercase loose file **shadows the BSA**: the engine checks loose first,
+fails the exact-case lookup, and does not fall through to the archive entry —
+so no BSA rescue (the helmet/shield paths, which have *no* loose shadow,
+resolve from `Meshes0/1.bsa` fine; that's the difference).
+
+### Scope
+
+Cross-scanned the five vanilla masters (`Skyrim.esm`, `Update.esm`,
+`Dawnguard.esm`, `HearthFires.esm`, `Dragonborn.esm`) — 16,701 unique mesh
+refs. Exact-case present: 82 (the vanilla content resolves from BSAs, which
+don't count as loose present). Missing exact-case: **16,619** — of which
+**1,200 had lowercase loose twins** (deployable) and **15,419 existed
+nowhere loose** (BSA-resolved vanilla originals — harmless, same paths the
+engine already loads from the archives every frame).
+
+### The fix
+
+Same tool, new ref source: `scripts/mesh-case-deploy.py` against the masters.
+**1,200 exact-case twins hardlinked** from their lowercase loose counterparts
+(0 already-present, 0 failed). Idempotent, additive, byte-identical, zero new
+content. The crater paths verified healed:
+
+```
+meshes/Armor/Iron/F/CuirassLight_1.nif      (819098 B, twin of lowercase)
+meshes/Armor/Iron/Male/CuirassLight_1.nif   (1846412 B, twin of lowercase)
+```
+
+Re-audit of the six Sentinel esps after deploy: **1,316 / 1,399 present, 0
+deployable, 83 gaps — unchanged**, no regression.
+
+### Why this closes the crash class
+
+Every future spawn (vanilla starter sets, server-handed vanilla gear, NPC
+armor load-in) now resolves its loose refs at exact case — no failed load,
+no `Marker_error`, no null-deref in the update pass. The server can hand
+any vanilla item and the mesh side will answer. The 15,419 BSA-resolved
+"gaps" are the vanilla game working as designed and stay untouched.
+
 ## The remaining board — sealed gaps (do not fabricate)
 
 These families are real content gaps. They are documented and left as-is;
