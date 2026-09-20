@@ -18,12 +18,18 @@ material fails.
 
 The one-way traffic is the tell:
 
-| Tree | Files found on disk | Why it breaks |
+| Tree | Files on disk (pre-fix) | What it is |
 |---|---|---|
-| `Data/meshes/` (lowercase) | few | meshes from lowercase-packaged mods only |
-| `Data/Meshes/` (capital) | ~14,000 | the bulk of mod meshes — unreachable from lowercase NIF refs |
-| `Data/textures/` (lowercase) | few | textures from lowercase-packaged mods only |
-| `Data/Textures/` (capital) | ~5,000 | unreachable from lowercase material refs |
+| `Data/meshes/` (lowercase) | ~14,000 | the bulk — correctly packaged mods, loads fine |
+| `Data/Meshes/` (capital) | ~1,000 | capital-root minority — unreachable from lowercase NIF refs |
+| `Data/textures/` (lowercase) | ~5,100 | the bulk — loads fine |
+| `Data/Textures/` (capital) | ~700 | capital-root minority — unreachable |
+
+The capital roots are the tip of it — a second wave hides **deeper inside the
+lowercase trees** as mixed-case paths: `meshes/0CCE/`, `textures/actors/Character/`,
+`meshes/armor/LunarGuard/`, ... Each of those subdirs is a case variant of the
+path the NIFs request and is equally unreachable. The mirror sweep caught
+~12,000 files in total across both waves.
 
 Concrete case from the field: the dress mod's NIF asks for
 `textures\0cce\dress_diffuse.dds`; the file exists only as
