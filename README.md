@@ -346,6 +346,7 @@ this repo) is the hardened v4:
 | Version gate red / "game version not supported" | the exe is still a Steam build (1.7.x) — the launcher sync never replaces it | Step 7: `download_depot` the three manifests, then `scripts/downgrade-1.6.1170.sh` |
 | Textures grey/black; `N textures failed to load` in EngineFixes.log | launcher's own download corrupted LZ4 DDS blocks in the textures BSAs | run Step 7 (`scripts/downgrade-1.6.1170.sh`) — or Steam Verify if the build is already correct — then `scripts/bsa-check.py` to confirm (never the launcher's repair) |
 | Modded armor invisible / red-green triangles, vanilla clean, `EngineFixes.log` silent | case war — mod archives ship `Textures/`/`Meshes/` capital, NIFs request lowercase, Linux filesystems are case-sensitive | `bash scripts/case-normalize.sh` (mirrors loose files to lowercase paths; idempotent, reversible). See `docs/the-linux-case-war.md` |
+| Red triangle + white `!` (missing diffuse) or green triangle (missing envmap) after the case fix | the texture exists nowhere — not loose, not in any BSA (the missing-texture board) | `bash scripts/bsa-names.sh` + `python3 scripts/true-missing.py` to list the board; clear entries only from real owned archives (extract-only where the base mod must not install). See `docs/the-missing-texture-board.md` |
 | Whole mods absent (armor mod just doesn't exist in game) | installer-option folders deployed raw into `Data/` (Vortex never ran the mod's installer) | reinstall those mods in Vortex and pick the options — launcher closed; see `docs/the-linux-case-war.md` |
 | Game back on 1.7.x after a successful downgrade | launched via Steam client, or Verify clicked | re-run the Step 7 script; keep AutoUpdateBehavior=2, launcher-only entry point |
 | "N mod files don't match the server" (e.g. CBBE 3BA `3BBB.esp` / `RaceMenuMorphsCBBE.esp`, "was edited", "different version") | launcher verifies tracked esp files against its bundled asar manifest (per-file sha256, canonical archive by md5); a Vortex reinstall with different installer options changed the bytes | extract the manifest-pinned archive entries, hash-verify, patch `Data/` **and** Vortex staging; see `docs/the-mod-verification-gate.md` |
@@ -386,6 +387,10 @@ this repo) is the hardened v4:
 | `~/.local/bin/daedric-online` | the KDE-shortcut launch script (v4) |
 | `~/.local/share/Steam/ubuntu12_32/steamapps/content/app_489830/` | the 1.6.1170 console depot downloads — merge source for Step 7; keep forever |
 | `~/.local/share/Steam/steamapps/appmanifest_489830.acf` | `AutoUpdateBehavior=2` — the version-hold that stops Steam re-updating |
+| `docs/the-missing-texture-board.md` | the layer-3 board: staged-never-deployed rescue, mask rescue, `metalic_e` cubemap chain of custody, sealed-gap families |
+| `docs/the-option-reinstall-list.md` | installer-option mods to reinstall via Vortex + field log of the rescue rounds |
+| `scripts/true-missing.py`, `scripts/bsa-names.sh` | the board audit: NIF refs vs loose+BSA coverage → true-missing/risky reports |
+| `scripts/deploy-staged-textures.py` | hardlink/copy deployer for staging-present textures (case-exact, idempotent) |
 
 ## Credits / war history
 
@@ -418,3 +423,13 @@ this repo) is the hardened v4:
   `3BBB.esp` + `RaceMenuMorphsCBBE.esp`, fileId 600100). Fixed by extracting
   the manifest-pinned archive entries, hash-verifying, and patching `Data/`
   plus Vortex staging (`docs/the-mod-verification-gate.md`).
+- Missing-texture board (layer 3): after the BSA heal + case mirror, a
+  residual class stayed broken — textures that exist nowhere (no loose, no
+  BSA, any case). 215 staged-but-never-deployed textures rescued from Vortex
+  staging; 27 dragon-priest masks extracted from their owned source archive;
+  Northern Iron's green triangles traced to one absent cubemap
+  (`metalic_e.dds`) sourced extract-only from Scale Nord Armor (the Sentinel
+  base mod that must not be installed alongside). Board: 128 → 127 refs.
+  Tooling + full chain of custody: `scripts/true-missing.py`,
+  `scripts/bsa-names.sh`, `scripts/deploy-staged-textures.py`,
+  `docs/the-missing-texture-board.md`, `docs/the-option-reinstall-list.md`.
