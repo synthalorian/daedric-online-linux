@@ -99,6 +99,65 @@ a real owned download, not aliased from another cubemap.
 Board after: **128 → 127 refs; the `metalic_e` ref's 106 instances closed**
 (all Northern Iron / Scale / ScaleSteel / Nord_Mercenary envmap demanders).
 
+## Phase 4 — the mesh-side reverse case war (1,175 twins deployed)
+
+### Symptom
+
+`metalic_e` round closed the texture gaps, yet the player's worn armor still
+rendered as a placeholder. The board was clean — every texture on the worn
+set's meshes existed at both cases (`windhelmarmor.dds/_m/_n`,
+`windhelmhelmet*`, `schelmet1*`, `steel_e.dds`). The failure was one layer
+up: **the meshes themselves**.
+
+### Root cause
+
+Sentinel's esps are authored on Windows and reference mesh paths with the
+original capital root — `NordWar\SonsOfSkyrim\Windhelm\WindhelmArmorHeavyM_1.nif`.
+This setup's deploy pipeline lowercased every loose file
+(`meshes/nordwar/sonsofskyrim/...`), and `case-normalize.sh` only mirrors in
+one direction (capital → lowercase) because Windows-authored *mods* ship
+capital roots while the *engine* answers lowercase refs. The Sentinel esps
+are the inverse: cap refs, lowercase files. Loose lookups are case-EXACT
+(eye-twin lesson) — so every cap-root mesh ref missed and the armor rendered
+as a placeholder even with perfect textures.
+
+### Scope
+
+Cross-scanned the six Sentinel esps for every `.nif` ref (1,399 unique).
+Exact-case present: **141** (the 3BA female refits that shipped capital
+`Armor_Replacer\1_NordWar\ScaleSteel\...` and stayed that way). Missing
+exact-case: **1,258** — of which **1,175** had byte-identical lowercase
+twins (deployable) and **83** existed nowhere (vanilla-root
+`Armor/Ebony|Elven|Glass|Dragonplate/...` replacer meshes the server expects
+but no owned archive provides — new sealed-gap family, see below).
+
+### The fix
+
+`scripts/mesh-case-deploy.py` — ref-driven reverse mirror: for every esp
+`.nif` ref missing at exact case with a lowercase twin, hardlink the twin to
+the exact ref'd path. Purely additive, idempotent, byte-identical, zero new
+content (unlike metalic_e, nothing was extracted — the files were already
+deployed, just not at the case the esp demands). Depends only on the game
+Data dir and the Sentinel esp filenames; no machine-specific paths.
+
+After: **1,316 / 1,399 refs exact-case present; 0 deployable; 83 real gaps.**
+
+The worn armor — TH_WindhelmCuirassHeavy + TH_WindhelmCloak +
+TH_WindhelmHelmet/Closed/Heavy (Sentinel - City Guards.esp, forms
+FE00C816–C81B via the item-use probe log) — now resolves end-to-end:
+biped, 1st-person, ground, helmet, cloak and weapon meshes all exist at
+exact case (verified, nlink=4 pairs).
+
+### Note on the 83 real mesh gaps
+
+`meshes/Armor/Ebony|Elven|Glass|Dragonplate|.../M|F/*.nif` — vanilla-root
+armor replacer meshes (`BootsGND.nif`, `Helmet_1.nif`, `CuirassGlassGO.nif`
+naming) referenced by Sentinel but present in no owned archive and no
+staging tree. They will placeholder *if the player equips vanilla ebony /
+elven / glass* — a real content gap, same sealed-gap discipline as the
+texture board. Machine list survives at `TRUE_GAP_OUT` output of
+`mesh-case-deploy.py`. No fabrication; needs a real source archive.
+
 ## The remaining board — sealed gaps (do not fabricate)
 
 These families are real content gaps. They are documented and left as-is;
