@@ -354,6 +354,7 @@ this repo) is the hardened v4:
 | Game back on 1.7.x after a successful downgrade | launched via Steam client, or Verify clicked | re-run the Step 7 script; keep AutoUpdateBehavior=2, launcher-only entry point |
 | "N mod files don't match the server" (e.g. CBBE 3BA `3BBB.esp` / `RaceMenuMorphsCBBE.esp`, "was edited", "different version") | launcher verifies tracked esp files against its bundled asar manifest (per-file sha256, canonical archive by md5); a Vortex reinstall with different installer options changed the bytes | extract the manifest-pinned archive entries, hash-verify, patch `Data/` **and** Vortex staging; see `docs/the-mod-verification-gate.md` |
 | Community Shaders: every shader fails with `E5000: syntax error, unexpected KW_NAMESPACE` (always at line 24) | Wine's builtin `d3dcompiler_47.dll` (~370 KB stub) can't parse HLSL `namespace` — CS compiles shaders at runtime and the shared header uses namespaces; DXVK is innocent | deploy the native ~4.9 MB `d3dcompiler_47.dll` from the vanilla install's `Data/Platform/Distribution/RuntimeDependencies/` to the prefix game dir **and** `windows/system32/`, add `d3dcompiler_47=n,b` to `WINEDLLOVERRIDES`. See `docs/the-community-shaders-compiler-war.md` |
+| Red diamond placeholder on NPCs (esp. male hold guards), EngineFixes.log silent | case-twin mesh dirs — `1_Nordwar` vs `1_NordWar`-style pairs where Wine exact-matches one variant and the other's unique files (male meshes) are invisible; some male meshes only ever existed inside the mod archive | `python3 scripts/merge-mesh-case-twins.py --data <Data> --merge SRC DST ...` folds the pairs; `--import <7z-extract>` fills never-deployed meshes. 503 → 2 missing refs (the 2 = dead refs for uninstalled hood mod). See `docs/the-case-twin-merge.md` |
 
 ## Operational safety rules (learned the hard way)
 
@@ -394,6 +395,8 @@ this repo) is the hardened v4:
 | `docs/the-missing-texture-board.md` | the layer-3 board: staged-never-deployed rescue, mask rescue, `metalic_e` cubemap chain of custody, phase-4 mesh-side case war, phase-5 vanilla-master front (crash fix), phase-5.1 actor-tree rollback (head-build regression), sealed-gap families |
 | `docs/the-option-reinstall-list.md` | installer-option mods to reinstall via Vortex + field log of the rescue rounds |
 | `docs/the-community-shaders-compiler-war.md` | the KW_NAMESPACE massacre: Wine's stub `d3dcompiler_47.dll` vs CS runtime shader compilation — native DLL deploy + override fix |
+| `docs/the-case-twin-merge.md` | phase 6: split-case mesh dirs (`1_Nordwar`/`1_NordWar`) hide files from Wine's exact-match lookup → red diamonds; the merge tool, archive import, newer-wins conflict rule |
+| `scripts/merge-mesh-case-twins.py` | merge case-twin mesh dirs + import extracted archives with CI dir resolution; dry-run default, idempotent, re-run after any sync/deploy |
 | `scripts/true-missing.py`, `scripts/bsa-names.sh` | the board audit: NIF refs vs loose+BSA coverage → true-missing/risky reports |
 | `scripts/deploy-staged-textures.py` | hardlink/copy deployer for staging-present textures (case-exact, idempotent) |
 | `scripts/mesh-case-deploy.py` | ref-driven reverse case mirror: materializes every esp-referenced `.nif` at exact case from its lowercase twin; reports true gaps |
