@@ -63,3 +63,34 @@ are dead references for a hood mod that isn't installed — benign.
   = what the game should render. Archive originals are superseded.
 - **Re-run the merge after every launcher sync / Vortex deploy** — both can
   re-create lowercase twins. The script is idempotent.
+
+## Postscript: the launch crash that wasn't the merge
+
+Right after the merge, two launches died at ~3 s uptime in
+`OpenAnimationReplacer.dll` `Hooks::UIHooks::CreateD3D11` — renderer/UI hook
+init, with DXVK config strings (`dxvk.hideIntegratedGraphics`, `"True"`,
+`"False"`) on the stack and an ASCII fragment (`"Ture"`) sitting in a pointer
+register. Looked scary, pointed at D3D11 device creation — not at meshes.
+
+The tell: **armor meshes don't load at 3.3 s.** The main menu never touches
+`Armor_Replacer`. A mesh merge cannot crash a UI hook.
+
+The bisect that proved it — **standalone boot smoke test**, same env the
+launcher uses, no launcher:
+
+```bash
+cd "$GAME"   # the prefix's Skyrim Special Edition dir
+GAMEID=umu-489830 UMU_ID=umu-489830 UMU_USE_STEAM=1 \
+PROTONPATH="$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-7-x86_64" \
+STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam" \
+SteamAppId=489830 SteamGameId=489830 \
+WINEDLLOVERRIDES="winemenubuilder.exe=d;d3dcompiler_47=n,b" \
+timeout 75 umu-run skse64_loader.exe
+```
+
+Booted clean: `init complete` in skse64.log, no new crash log, process alive
+past the crash window. Next launcher launch worked too. Root cause of the two
+17:25 crashes: they **raced the merge mid-flight** — files moving under a
+starting wineserver. Lesson: don't launch while the merge script is running,
+and when a crash's stack doesn't touch the subsystem you just changed, test
+standalone before reverting.
