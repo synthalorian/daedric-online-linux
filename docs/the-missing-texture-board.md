@@ -353,3 +353,31 @@ Lessons added:
 - Installer-option mods strike again: an option folder that was never
   selected deploys nothing, and nothing notices until a specific NPC walks
   into render distance.
+
+## Phase 7 — phantom references: the mod shipped less than its ESP expects
+
+Episode: red diamonds on another player's character (belt pouch + gauntlets),
+2026-09-24. EngineFixes clean; every static resolution green; root cause was
+ESPs referencing meshes the mods never shipped.
+
+Pattern: **an ESP string-references asset paths that exist in NO shipped
+archive** — the mod author renamed/removed content between versions while the
+ESP (or a server-side ESP like RP_CraftGates) still points at the old names.
+Nothing to case-merge, nothing to extract; the bytes exist nowhere.
+
+Kills this phase (clone-nearest-placeholder; meshes copied, textures symlinked
+per doctrine):
+- `evgnnSMP/pouches/basicpouch*` (5 meshes + 4 textures) — Nirn Necessities
+  v1.03 ships only sturdypouch; basicpouch refs are vestigial. Cloned sturdy →
+  basic in BOTH case trees.
+- `evgnnSMP/smpsatchelphysics{1,2}chain.nif` — never shipped at all; cloned
+  patchworksatchel_GO as stand-in.
+- `Daedric Lord Armor/DaedricLordArmorGauntlets_{0,1}.nif` — mod ships female
+  set only; male gauntlets cloned from F variants. (Male wearer = the diamond
+  synth saw on a player character.)
+- `Dragon Priests/Volsung/DragonPriestArmorF_Volsung_GND.nif` — male GND
+  cloned as F GND (mod ships male ground model only).
+
+Board state after: 27 wearable-family refs remain, ALL verified dead
+(Creation Club content not installed, removed mod content, " - Copy_1"
+author-garbage refs, spell FX). None render in normal play.
