@@ -316,3 +316,40 @@ entry stays.
    is idempotent and cheap; the board should trend down, never up.
 4. **Case-exact deploy** — the game answers lowercase NIF refs on a
    case-sensitive FS; a capitalized deploy is an invisible deploy.
+## Phase 6 — the priest board: option-folder misses + lowercase-tree twins
+
+Episode: red/green triangle on a worn armor in live play; EngineFixes.log
+silent (missing textures don't log there — only unreadable ones do).
+
+The board this time came from chaining ESP → armor-mesh → NIF texture refs →
+Wine-semantics resolve → BSA subtract (77 missing across ~76 families).
+The coherent blocks and their verdicts:
+
+- **Dragon priest masks/robes (27 textures)** — `textures/actors/dragon
+  priest/{hevnoraak,krosis,morokei,nahkriin,otar,rahgot,vahlok,vokun,volsung}`
+  `(.dds/_m/_n)`. Only Konahrik+Miraak had ever deployed. The rest sat in
+  installer-OPTION folders of `Dragon Priests Retexture SE - Half Res`
+  (`05UniqueDragonPriests`, plus `08NahkriinEbonyNPC` for the Nahkriin
+  diffuse and `07MorokeiNPCGold` for Morokei) — the same option-folder
+  disease as `docs/the-option-reinstall-list.md`. Extracted and deployed to
+  BOTH case trees (`Textures/actors/dragon priest/` + hardlinks in
+  `textures/actors/dragon priest/`). 27/27 resolve under Wine semantics.
+- **LostArk Kamen armor (16)** and **LoA Reborn Paladin cloak uppers (10)** —
+  files existed in the PROPER-case tree only; NIFs query lowercase. Fixed
+  with lowercase-tree symlinks (`textures/lostark`, `textures/loa reborn
+  paladin legendary`) pointing at the proper dirs.
+- **Tail (~35 one-offs)**: `stormcloaksgloves(.dds/_n)` absent from every
+  owned archive (dead ref in the mod); `metalic_e` still the Phase-3 unowned
+  Scale Nord Armor case; scattered `_m` envmaps and `* - copy` files from
+  mods that never shipped them. Not user-visible in normal play; left on
+  the board.
+
+Lessons added:
+- **Verify case work with a Wine-semantics resolver, never `ls`/`test -e`**
+  — case-sensitive shell checks report false FAILs on CI-resolvable paths.
+- **`ln -sfn` into an existing real dir nests inside it** (`dir/dragon
+  priest`) instead of replacing. Check the target is absent (or remove it)
+  before linking.
+- Installer-option mods strike again: an option folder that was never
+  selected deploys nothing, and nothing notices until a specific NPC walks
+  into render distance.
