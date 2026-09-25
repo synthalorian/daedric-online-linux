@@ -336,6 +336,7 @@ this repo) is the hardened v4:
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Game won't launch at all (launcher does nothing / instant exit) | **Steam client not running** — the launcher's Steam bridge needs the live client, even with `UMU_USE_STEAM=1` | Start Steam first, then launch Daedric |
 | Wine aborts `NtGdiCreateColorSpace` at startup | GE-Proton11-6 (and older) missing the export | Use GE-Proton11-7 |
 | `[S_API] Failed to load module ...steamclient64.dll` then silent exit | `lsteamclient` disabled by GE on umu launches | Export `UMU_USE_STEAM=1` |
 | umu `WARNING: Executable not found` | full `C:\...` path passed | `cd` into launcher dir, pass bare `Daedric Online.exe` |
