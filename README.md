@@ -46,6 +46,7 @@ methods*:
 | Steam | official client (native or Flatpak) — must be running for the Steam bridge (Step 5) and the console (Step 7) |
 | GE-Proton11-7 | manual download to `~/.local/share/Steam/compatibilitytools.d/` — no packaging involved, identical on every distro |
 | umu-launcher | Flathub, or the distro's package where available (AUR on Arch) |
+| Vortex | see **Mod manager lanes** below — Arch package, AppImage, or Lutris |
 
 Caveats:
 
@@ -68,6 +69,106 @@ Caveats:
   on any DE; the values shown are just this machine's example.
 - **Linux-only by design**: macOS and Windows use different Steam depot
   layouts and client paths — this is the Linux path, full stop.
+
+---
+
+## Mod manager lanes: Vortex on any distro
+
+The 115-mod collection comes in through **Vortex** — nothing else. (Never
+Mod Organizer 2 for Daedric: MO2's VFS keeps the real `Data/` folder clean,
+so the launcher reports every single mod as missing, permanently.)
+
+Nexus ships **Windows binaries only** — every Linux Vortex is a community
+build or a Wine wrap. Three lanes, best first:
+
+### Lane A — Arch / CachyOS (native package)
+
+```bash
+paru -S vortex    # or: yay -S vortex
+```
+
+Wayland users launch it with `GDK_BACKEND=x11 vortex` — Vortex is an X11 app.
+
+### Lane B — any distro incl. immutable (Bazzite, SteamOS, Silverblue): the AppImage
+
+Grab the **linux-vortex AppImage** from its GitHub releases. It compiles the
+*official* `Nexus-Mods/Vortex` source — Nexus just doesn't publish Linux
+builds, so "unofficial" describes the packaging, not the code. Judge it by
+the upstream, not the repo.
+
+- Make it executable, run it, done — no package manager, survives atomic
+  updates, lives happily in `/var/home` on Bazzite.
+- Wayland: `GDK_BACKEND=x11 ./Vortex-*.AppImage`.
+- **Drive-probe bug**: the staging-folder picker can throw
+  *"OS is unsupported"* on a **perfectly healthy ext4 drive** if its
+  mountpoint is non-standard (hand-rolled fstab mounts like `/var/mnt/HDD`;
+  normal automounts live under `/run/media`). It's the AppImage's
+  `/proc/mounts` parser failing, not your filesystem. Workaround:
+  ```bash
+  sudo mount --bind /var/mnt/HDD/SteamLibrary ~/SteamHDD
+  ```
+  Point Vortex staging under the home-relative bind path and persist the
+  bind in fstab (`none bind`). First update the AppImage — fixes land.
+  Capture the real exception with `./Vortex-*.AppImage 2>&1 | tee ~/vortex.log`.
+
+### Lane C — fallback: Windows Vortex via Lutris
+
+If the AppImage still refuses (staging + game on the same healthy ext4
+partition and it won't deploy), install the **Windows Vortex through
+Lutris** — the community installer wires Wine + .NET for you. This lane has
+two traps, both avoidable:
+
+1. **Do NOT install Skyrim inside the Lutris/Wine prefix.** Wine maps
+   `Z:` → `/`, so point Vortex's game path at the *native Linux* Skyrim
+   install, e.g. `Z:\home\<you>\.local\share\Steam\steamapps\common\Skyrim
+   Special Edition` (or wherever your library is).
+2. **Set Vortex's mod-staging folder explicitly to a `Z:` path on the same
+   partition as the game** — e.g. `Z:\home\<you>\VortexStaging`. The default
+   lands *inside the Wine prefix* (its system drive), which is a different
+   "partition" as far as hardlinks are concerned and puts you right back at
+   the deployment wall.
+
+Wine hardlinks map to the native `link()` syscall, so once staging and game
+share a partition, Vortex deploys normally and the rest of this guide is
+identical.
+
+### Vortex "No deployment method available" (red banner, fixes greyed out)
+
+Vortex can write **nothing** into the game dir. The exact reason lives in the
+notification bell — read it first. Then triage in order:
+
+1. `df -T <game path>` — `exfat`/`vfat` = dead end (no links possible at all;
+   move the game to ext4 via Steam → Settings → Storage); `ntfs` = hardlinks
+   impossible and `chown` is ignored unless mounted with `permissions`.
+2. `ls -ld` shows root ownership → `sudo chown -R $USER:$USER <steam
+   library>`, then **fully restart Vortex** (it caches the deployment check;
+   closing the window is not enough).
+3. `mount` shows `ro` → remount `rw`.
+4. Still grey → how is Vortex installed: Flatpak = sandbox can't see the
+   drive (`flatpak override --filesystem=<path>` or switch to the AppImage);
+   AppImage on a non-standard mountpoint = the drive-probe bug above.
+5. Verify writability directly: `touch <Data>/testwrite && rm <Data>/testwrite`.
+
+### After any deploy: bridge the mods into the prefix
+
+Whichever lane you use, Vortex deploys to the **Steam** Skyrim `Data/`. The
+launcher runs from the **umu prefix** and needs the same files there:
+
+```bash
+rsync -a "<steam Skyrim>/Data/" "<prefix game dir>/Data/"
+```
+
+(trailing slash on the source; `-a` materializes real files prefix-side —
+never symlink-deploy into the prefix itself, that's the mesh double-load
+crash). Re-run after every Vortex deploy. If you can't find the paths:
+
+```bash
+find ~ /run/media -maxdepth 8 -type d -iname "Skyrim Special Edition" 2>/dev/null
+find ~ -maxdepth 6 -type d -name umu-489830 2>/dev/null
+```
+
+Flatpak Steam nests under `~/.var/app/com.valvesoftware.Steam/...`; Bazzite
+home is `/var/home/<user>` — `$HOME` handles it, `~` inside quotes does not.
 
 ---
 
@@ -357,6 +458,8 @@ this repo) is the hardened v4:
 | Community Shaders: every shader fails with `E5000: syntax error, unexpected KW_NAMESPACE` (always at line 24) | Wine's builtin `d3dcompiler_47.dll` (~370 KB stub) can't parse HLSL `namespace` — CS compiles shaders at runtime and the shared header uses namespaces; DXVK is innocent | deploy the native ~4.9 MB `d3dcompiler_47.dll` from the vanilla install's `Data/Platform/Distribution/RuntimeDependencies/` to the prefix game dir **and** `windows/system32/`, add `d3dcompiler_47=n,b` to `WINEDLLOVERRIDES`. See `docs/the-community-shaders-compiler-war.md` |
 | Red diamond placeholder on NPCs (esp. male hold guards), EngineFixes.log silent | case-twin mesh dirs — `1_Nordwar` vs `1_NordWar`-style pairs where Wine exact-matches one variant and the other's unique files (male meshes) are invisible; some male meshes only ever existed inside the mod archive | `python3 scripts/merge-mesh-case-twins.py --data <Data> --merge SRC DST ...` folds the pairs; `--import <7z-extract>` fills never-deployed meshes. 503 → 2 missing refs (the 2 = dead refs for uninstalled hood mod). See `docs/the-case-twin-merge.md` |
 | Crash ~3 s after launch in `OpenAnimationReplacer.dll` `UIHooks::CreateD3D11`, DXVK config strings on stack, right after running mesh fixes | launching raced the merge mid-flight (files moving under a starting wineserver) — NOT the merge itself; meshes don't load at 3 s | relaunch after the merge finishes; to exonerate any data change, boot standalone: `timeout 75 umu-run skse64_loader.exe` with the launcher env (recipe in `docs/the-case-twin-merge.md` postscript) |
+| Vortex red banner: "No deployment method available", fixes greyed out | Vortex can write nothing into the game dir — exfat/ntfs mount, root-owned library, read-only mount, Flatpak sandbox, or the linux-vortex AppImage drive-probe bug on non-standard mountpoints | triage tree in **Mod manager lanes** above; reason text lives in Vortex's notification bell |
+| Launcher: "N required mods missing" after Vortex says all deployed | Vortex deployed to the **Steam** Skyrim Data, not the umu prefix's copy | `rsync -a "<steam Skyrim>/Data/" "<prefix game dir>/Data/"` — re-run after every Vortex deploy (see **Mod manager lanes**) |
 
 ## Operational safety rules (learned the hard way)
 
