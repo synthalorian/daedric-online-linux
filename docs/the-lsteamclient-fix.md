@@ -109,4 +109,11 @@ export WINEDEBUG=+seh
 umu-run "Daedric Online.exe" --no-sandbox
 ```
 
-The seam between "launcher fine" and "game dead" is exactly this env var.
+The seam between "launcher fine" and "game dead" is exactly this env var
+— on a distro whose `$HOME` is `/home/<user>`.
+
+If the log also says `unable to use parent for game drive, path /var/home`
+and `setup_steam_files steam_install_path ""`, the env var is already set
+and is not the fix. Fedora Atomic (Bazzite and the same family) never
+derives a Steam install path from `/var/home`. See
+`docs/the-atomic-steam-bridge.md`.

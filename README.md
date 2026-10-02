@@ -18,8 +18,14 @@ Linux you need the **launcher and the game it spawns to share one wineserver
 and one Steam bridge**. The way to do that: migrate the launcher into a **umu
 prefix** (`umu-489830`), run it under **GE-Proton11-7**, and — the critical
 bit — launch with **`UMU_USE_STEAM=1`** so GE keeps its `lsteamclient` bridge
-enabled. Without that env var, the game dies silently at
-`SteamAPI_Init(): Failed to load module 'C:\Program Files (x86)\Steam\steamclient64.dll'`.
+enabled. Without that env var, the game dies silently at the
+`steamclient64.dll` load.
+
+That env var is the fix when `$HOME` is `/home/<user>`. On Fedora Atomic
+(Bazzite, Silverblue, Kinoite) `umu-run` still leaves the Steam install path
+empty — the launcher opens and Skyrim never spawns. Do not keep retrying
+Step 4 if the log says `path /var/home`. The working launch is the non-Steam
+shortcut in **Fedora Atomic / Bazzite** below.
 
 **The build question — the game must end at 1.6.1170.** The launcher's client
 sync (Step 6) *is* the downgrade: its internal downloader is pinned to the
@@ -38,7 +44,8 @@ Yes — every step here is distro-agnostic in principle. The whole flow is
 Steam client + Proton + game-folder mechanics: no kernel features, no init
 systems, no distro packaging. Verified live on **CachyOS (Arch, KDE Plasma 6,
 Wayland)**; any mainstream Linux with Steam + Proton support should follow
-exactly the same path. The only distro-dependent choices are *install
+the same path, except the launch step on Fedora Atomic (caveat below). The
+only distro-dependent choices are *install
 methods*:
 
 | Component | Install on any distro |
@@ -46,7 +53,7 @@ methods*:
 | Steam | official client (native or Flatpak) — must be running for the Steam bridge (Step 5) and the console (Step 7) |
 | GE-Proton11-7 | manual download to `~/.local/share/Steam/compatibilitytools.d/` — no packaging involved, identical on every distro |
 | umu-launcher | Flathub, or the distro's package where available (AUR on Arch) |
-| Vortex | see **Mod manager lanes** below — Arch package, AppImage, or Lutris |
+| Vortex or Amethyst | see **Mod manager lanes** — Vortex is the verified path; Amethyst is the native-Linux alternative |
 
 Caveats:
 
@@ -69,17 +76,29 @@ Caveats:
   on any DE; the values shown are just this machine's example.
 - **Linux-only by design**: macOS and Windows use different Steam depot
   layouts and client paths — this is the Linux path, full stop.
+- **Fedora Atomic (Bazzite, Silverblue, Kinoite)**: `$HOME` is
+  `/var/home/<user>`, not `/home/<user>`. `umu-run` opens the launcher and
+  never spawns Skyrim (`steam_install_path ""`). Add the launcher exe as a
+  non-Steam game under GE-Proton11-7 instead. Native Steam was the reported
+  case. The downgrade and the mod-manager steps do not change. Section:
+  **Fedora Atomic / Bazzite**, after Step 5.
 
 ---
 
-## Mod manager lanes: Vortex on any distro
+## Mod manager lanes
 
-The 115-mod collection comes in through **Vortex** — nothing else. (Never
-Mod Organizer 2 for Daedric: MO2's VFS keeps the real `Data/` folder clean,
-so the launcher reports every single mod as missing, permanently.)
+The collection comes in through a mod manager that **writes real files into
+the Steam Skyrim `Data/`**. The launcher hash-checks that tree (then the umu
+prefix copy of it). Two things fail that test permanently:
 
-Nexus ships **Windows binaries only** — every Linux Vortex is a community
-build or a Wine wrap. Three lanes, best first:
+- **Mod Organizer 2.** Its VFS keeps the real `Data/` clean, so the launcher
+  reports every mod missing.
+- **Amethyst's VFS deploy**, for the same reason. Amethyst is allowed (Lane D).
+  Its VFS mode is not.
+
+Nexus ships **Windows Vortex binaries only**. Lanes A–C are Vortex. Lane D
+is the native-Linux alternative. Use one manager. Do not point Vortex and
+Amethyst at the same Skyrim.
 
 ### Lane A — Arch / CachyOS (native package)
 
@@ -132,6 +151,70 @@ Wine hardlinks map to the native `link()` syscall, so once staging and game
 share a partition, Vortex deploys normally and the rest of this guide is
 identical.
 
+### Lane D — Amethyst (native Linux alternative, including Bazzite)
+
+[Amethyst](https://github.com/ChrisDKN/Amethyst-Mod-Manager) is a Linux-native
+manager. MO2-shaped window, not MO2. It can install and revision-update the
+Nexus collection
+[`ptmvzi`](https://www.nexusmods.com/games/skyrimspecialedition/collections/ptmvzi).
+Use it when Vortex cannot deploy, or on a fresh install. Do not migrate a
+working Vortex tree onto it in the middle of a revision bump.
+
+This lane is **not** the path the rest of this guide was verified on. The
+launcher's "mod files don't match" gate is the verifier, not Amethyst's
+install-complete dialog.
+
+**Install on Bazzite / any immutable distro: AppImage, not Flatpak.** A
+Flatpak cannot see the Steam library without a filesystem override — same
+trap as Flatpak Vortex. The installer only downloads the GitHub-release
+AppImage into `~/Applications` and writes a desktop file. No sudo. Read it
+before running it:
+
+```bash
+curl -fsSL -o /tmp/Amethyst-MM-installer.sh \
+  https://raw.githubusercontent.com/ChrisDKN/Amethyst-Mod-Manager/main/src/appimage/Amethyst-MM-installer.sh
+bash /tmp/Amethyst-MM-installer.sh
+```
+
+Or download the AppImage from the
+[releases page](https://github.com/ChrisDKN/Amethyst-Mod-Manager/releases)
+and install it with Gear Lever (already on Bazzite). Config and the default
+staging folder land in `~/.config/AmethystModManager`.
+
+**Rules. All of them.**
+
+1. Game path = the **Steam** Skyrim, never the umu prefix. Staging must be
+   on the same filesystem as that Skyrim. Hardlinks cannot cross drives, and
+   on Bazzite they cannot cross btrfs subvolumes either — home and a second
+   Steam library often are different subvolumes.
+2. Deploy method = **hardlink**. Symlink only when hardlink is impossible.
+   **Never VFS.**
+3. Turn **case-alias symlinks off** (quick configure) before deploy. Those
+   are extra `data` / `textures` / `TEXTURES` directory symlinks. This
+   guide's mesh fixes assume one path per file. Aliases that get copied
+   into the prefix are the double-load crash.
+4. After deploy, `skse64_loader.exe` must still exist under that name next
+   to `SkyrimSE.exe`. Amethyst renames the script extender onto the Bethesda
+   launcher so Steam's Play button launches SKSE. The Daedric launcher
+   spawns `skse64_loader.exe`. If the name is gone, copy it back. Do not
+   launch Skyrim from Steam or from Amethyst.
+5. Do not run LOOT. The server wants the collection's load order. If you
+   sorted, Nexus → Collections → Reset Load Order.
+6. Amethyst's automatic DLL overrides apply only when **it** launches the
+   game. They do nothing for the umu launch. Community Shaders still needs
+   the native `d3dcompiler_47.dll` in the prefix (troubleshooting table).
+7. Collection: paste the `ptmvzi` URL, install or update to the revision the
+   launcher banner names. Premium downloads in-app. A free account downloads
+   one mod at a time in the browser; Amethyst watches the downloads folder.
+   Do not click **INSTALL THE COLLECTION** / **GET MODS** in the Daedric
+   launcher — that overwrites this install.
+8. Amethyst applies the collection's FOMOD choices itself. That has not been
+   verified against this collection's pins. If the launcher then says an esp
+   is "wrong version/edited", that file or choice is wrong. Reinstall that
+   mod from the pinned file. Do not clean it in xEdit.
+9. `Data_core` next to `Data/` is Amethyst's vanilla backup. The bridge
+   rsync below is `Data/` only. Do not copy `Data_core` into the prefix.
+
 ### Vortex "No deployment method available" (red banner, fixes greyed out)
 
 Vortex can write **nothing** into the game dir. The exact reason lives in the
@@ -151,16 +234,29 @@ notification bell — read it first. Then triage in order:
 
 ### After any deploy: bridge the mods into the prefix
 
-Whichever lane you use, Vortex deploys to the **Steam** Skyrim `Data/`. The
-launcher runs from the **umu prefix** and needs the same files there:
+Whichever lane you use, the manager deploys to the **Steam** Skyrim `Data/`.
+The launcher runs from the **umu prefix** and needs the same files there:
 
 ```bash
 rsync -a "<steam Skyrim>/Data/" "<prefix game dir>/Data/"
 ```
 
-(trailing slash on the source; `-a` materializes real files prefix-side —
-never symlink-deploy into the prefix itself, that's the mesh double-load
-crash). Re-run after every Vortex deploy. If you can't find the paths:
+Trailing slash on the source. No `--delete` — the prefix holds server-pushed
+files the Steam tree does not. Re-run after every deploy.
+
+`-a` copies hardlinked files as real files. It does **not** follow
+symlinks; it reproduces them. A hardlink deploy is what you want. If the
+deploy had to be symlinks, use `rsync -aL` instead, and only after
+case-alias symlinks are off — `-L` follows directory symlinks and will
+duplicate the tree if those aliases exist. Never symlink-deploy into the
+prefix itself. That is the mesh double-load crash.
+
+Enable every plugin the new revision added in the **umu**
+`AppData/Local/Skyrim Special Edition/Plugins.txt`, as `*Name.esp`. Neither
+Vortex nor Amethyst writes that file when its game path is the Steam
+library.
+
+If you can't find the paths:
 
 ```bash
 find ~ /run/media -maxdepth 8 -type d -iname "Skyrim Special Edition" 2>/dev/null
@@ -181,12 +277,12 @@ home is `/var/home/<user>` — `$HOME` handles it, `~` inside quotes does not.
 | umu-launcher | 1.4.3 (`umu-run`; Flathub or distro package — see Distro portability) |
 | GE-Proton | **GE-Proton11-7** at `~/.local/share/Steam/compatibilitytools.d/GE-Proton11-7-x86_64` |
 | Skyrim SE | ends at **1.6.1170** (exe FileVersion `1.6.1170.0`, size **37157144**). Start from any build — the launcher sync (Step 6) pulls the 1.6.1170 data and the Steam-console install (Step 7) completes the pin with pristine files: the build with the working textures. Steam's Aug-2026 auto-update (1.7.104) is handled by the same flow |
-| Mods | Vortex-installed collection (115 mods) in the game `Data/` folder |
+| Mods | collection in the game `Data/` folder, via Vortex (verified) or Amethyst (Lane D) |
 | Daedric launcher | the server launcher exe + its `AppData` config |
 
 > **Never hand-modify the game folder.** The launcher gates on a foreign-file
 > list (see its `dist/main.js`) and on the exact `SkyrimSE.exe` size. Your
-> mods go in via Vortex, not by hand. The one sanctioned exception: the Step 7
+> mods go in via the mod manager, not by hand. The one sanctioned exception: the Step 7
 > console install, which re-arms the exact vanilla 1.6.1170 files (including
 > the exe) the launcher checks for.
 
@@ -220,8 +316,10 @@ PREFIX=~/.local/share/Steam/steamapps/common   # the game
 U=~/Games/umu/umu-489830                       # umu prefix, GAMEID=umu-489830
 
 mkdir -p "$U/drive_c"
-# Copy from your existing launcher prefix (or a fresh wine install):
-#   drive_c/Program Files/DaedricOnline/           (launcher, 319 MB, 671 files)
+# Copy from your existing launcher prefix, or extract a fresh one.
+# Do not run DaedricOnline-Setup.exe — see
+# docs/the-launcher-website-update.md
+#   drive_c/Program Files/DaedricOnline/           (launcher app tree)
 #   drive_c/users/<user>/AppData/Roaming/Daedric Online/   (config, 2.6 MB)
 #   drive_c/users/<user>/AppData/Local/daedric-launcher-updater/  (85 MB)
 ```
@@ -254,6 +352,11 @@ Related: the first time you hit Play, the launcher says
 didn't finish"** — that is **not** a real problem. It's the verify panel
 complaining the client-file sync hasn't run yet because the client is parked.
 Let the sync finish and the panel clears itself.
+
+Launcher **1.3.79** (2026-10-01) narrowed one slice of that panel: mods that
+ship with the client files (Immersive Armors Retexture and the same class)
+no longer show as missing before those files finish downloading. Press Play.
+That does not retire the parked-client message on older builds.
 
 ## Step 4 — Launch the launcher under GE (the exact env)
 
@@ -319,6 +422,70 @@ Then `SkyrimSE.exe` boots, SKSE 2.2.6 initializes and scans the plugin
 directory (ActorLimitFix, AnimationQueueFix, cbp, CommunityShaders,
 CraftingCategories, CrashLogger, ...), `skyrim-platform` registers its browser
 API, and the main menu comes up.
+
+## Fedora Atomic / Bazzite — when `umu-run` never spawns the game
+
+Step 4 is the verified path when `$HOME` is `/home/<user>`. It is not the
+path on Fedora Atomic.
+
+Field report, not reproduced on the CachyOS machine this guide was written
+from: **Bazzite (Fedora Atomic, KDE), native Steam, Nvidia 2080 Super, umu
+1.4.4, GE-Proton11-7.** The launcher opened. Skyrim never spawned. The full
+Step 4 env, including `UMU_USE_STEAM=1`, was already set. Every attempt
+logged:
+
+```
+Proton: Error: unable to use parent for game drive, path /var/home
+setup_steam_files steam_install_path ""
+[S_API] SteamAPI_Init(): Failed to load module 'steamclient64.dll'
+```
+
+Bazzite's real home is `/var/home/<user>` (`/home` is a symlink). Proton's
+game-drive check only accepts a directory named `steamapps` whose parent is
+writable and on the same device. `/var/home` fails that check. Proton then
+hands the bridge an empty Steam install path (`steam_install_path ""`).
+`UMU_USE_STEAM=1` does not fill that path. That variable only stops GE from
+disabling `lsteamclient` (this step). Empty install path, no
+`steamclient64.dll`, no game. Retuning the umu env will not fix it — this
+report already had the full Step 4 env.
+
+A lone `unable to use parent for game drive, path /home` is normal umu noise.
+The signature here is `path /var/home` plus `steam_install_path ""`.
+
+**What worked:** add the launcher exe to Steam as a non-Steam game and let
+Steam's own Proton build the bridge.
+
+1. GE-Proton11-7 must already be in
+   `~/.local/share/Steam/compatibilitytools.d/`. Restart Steam if it is not
+   in the compatibility-tool list.
+2. Steam → **Games → Add a Non-Steam Game to My Library** → Browse to
+   `Daedric Online.exe`. That is the extracted launcher
+   (`Program Files/DaedricOnline/Daedric Online.exe`), not
+   `DaedricOnline-Setup.exe`, and not `SkyrimSE.exe`.
+3. Right-click the shortcut → **Properties** → **Compatibility** → check
+   **Force the use of a specific Steam Play compatibility tool** →
+   **GE-Proton11-7**.
+4. Launch options: `%command% --no-sandbox`
+5. Press Play on that shortcut.
+
+Steam fills the compat paths before Proton starts, so the install path is
+no longer empty. Reported result: the game spawned and connected.
+
+This replaces Step 4 and the Step 9 `umu-run` script. It does not replace
+the downgrade, the mod manager, or the case fixes — those still land in the
+Steam Skyrim the launcher points at. Steam creates its own `compatdata/`
+prefix for the shortcut. Leave it. Log in again if the umu prefix's
+`settings.json` does not come along, and point the launcher at the **Steam**
+Skyrim.
+
+**Do not press Play on Skyrim Special Edition in the library.** That is the
+Steam app. It will update off 1.6.1170. The non-Steam shortcut is the
+launcher exe only. Rule 7 still applies to the Skyrim app.
+
+Silverblue, Kinoite, and other ostree spins with home at `/var/home` hit the
+same wall. A normal `/home/<user>` distro stays on Step 4.
+
+Mechanism: `docs/the-atomic-steam-bridge.md`.
 
 ## Step 6 — In the launcher: Play → sync → Launch
 
@@ -431,6 +598,26 @@ this repo) is the hardened v4:
 - stdio → logfile so Electron's stdio wrapping never hits EBADF
 - the full proven env from Step 4, including `UMU_USE_STEAM=1`
 
+Fedora Atomic: do not use this script. It hits the empty `steam_install_path`
+failure. Use the non-Steam shortcut in **Fedora Atomic / Bazzite**.
+
+## Updating the launcher from the website
+
+Discord will sometimes say grab the launcher from the website instead of
+waiting on the in-app updater. On Linux that is a 7z extract into
+`Program Files/DaedricOnline`, not a double-click of
+`DaedricOnline-Setup.exe`.
+
+The site file is
+`https://daedriconline.com/download/DaedricOnline-Setup.exe`. It is done
+only when its size and base64 sha512 match
+`GET http://play.daedriconline.com:3000/launcher/latest.yml`. If
+`AppData/Local/daedric-launcher-updater/pending/temp-DaedricOnline-Setup-*.exe`
+has stopped short of that size, do not close the launcher — a normal quit
+installs the partial. SIGKILL by PID, delete the partial, extract, relaunch.
+Full procedure, the 2026-10-01 1.3.60 → 1.3.79 check, and what not to touch:
+`docs/the-launcher-website-update.md`.
+
 ---
 
 ## Troubleshooting table
@@ -440,6 +627,7 @@ this repo) is the hardened v4:
 | Game won't launch at all (launcher does nothing / instant exit) | **Steam client not running** — the launcher's Steam bridge needs the live client, even with `UMU_USE_STEAM=1` | Start Steam first, then launch Daedric |
 | Wine aborts `NtGdiCreateColorSpace` at startup | GE-Proton11-6 (and older) missing the export | Use GE-Proton11-7 |
 | `[S_API] Failed to load module ...steamclient64.dll` then silent exit | `lsteamclient` disabled by GE on umu launches | Export `UMU_USE_STEAM=1` |
+| Launcher opens, Skyrim never spawns; log has `path /var/home` and `steam_install_path ""` | Fedora Atomic home. Proton will not derive a Steam install path from `/var/home`. `UMU_USE_STEAM=1` is already set and does not fill it | Add `Daedric Online.exe` as a non-Steam game, force GE-Proton11-7, launch option `%command% --no-sandbox`. Do not Play the Skyrim library entry. See **Fedora Atomic / Bazzite** |
 | umu `WARNING: Executable not found` | full `C:\...` path passed | `cd` into launcher dir, pass bare `Daedric Online.exe` |
 | Game dies pre-SKSE with no crash log | almost always the bridge (see above) | `WINEDEBUG=+seh` to see the S_API verdict |
 | "8 required mods missing" panel | client-file sync never completed | let the sync finish; panel says so itself |
@@ -455,35 +643,50 @@ this repo) is the hardened v4:
 | Whole mods absent (armor mod just doesn't exist in game) | installer-option folders deployed raw into `Data/` (Vortex never ran the mod's installer) | reinstall those mods in Vortex and pick the options — launcher closed; see `docs/the-linux-case-war.md` |
 | Game back on 1.7.x after a successful downgrade | launched via Steam client, or Verify clicked | re-run the Step 7 script; keep AutoUpdateBehavior=2, launcher-only entry point |
 | "N mod files don't match the server" (e.g. CBBE 3BA `3BBB.esp` / `RaceMenuMorphsCBBE.esp`, "was edited", "different version") | launcher verifies tracked esp files against its bundled asar manifest (per-file sha256, canonical archive by md5); a Vortex reinstall with different installer options changed the bytes | extract the manifest-pinned archive entries, hash-verify, patch `Data/` **and** Vortex staging; see `docs/the-mod-verification-gate.md` |
-| Community Shaders: every shader fails with `E5000: syntax error, unexpected KW_NAMESPACE` (always at line 24) | Wine's builtin `d3dcompiler_47.dll` (~370 KB stub) can't parse HLSL `namespace` — CS compiles shaders at runtime and the shared header uses namespaces; DXVK is innocent | deploy the native ~4.9 MB `d3dcompiler_47.dll` from the vanilla install's `Data/Platform/Distribution/RuntimeDependencies/` to the prefix game dir **and** `windows/system32/`, add `d3dcompiler_47=n,b` to `WINEDLLOVERRIDES`. See `docs/the-community-shaders-compiler-war.md` |
+| Community Shaders: `N shaders failed to compile` / `E5000: unexpected KW_NAMESPACE` (the compile dialog stuck near 0% with hundreds already failed) | Wine's builtin `d3dcompiler_47.dll` (~370 KB stub) can't parse HLSL `namespace`. Failures are instant, not a slow compile. DXVK is innocent | Press Escape to leave the dialog. Deploy the native ~4.9 MB `d3dcompiler_47.dll` from `Data/Platform/Distribution/RuntimeDependencies/` to the prefix game dir **and** `windows/system32/`, add `d3dcompiler_47=n,b` to `WINEDLLOVERRIDES`. Leave the launcher's CS toggle off until both copies are ~4.9 MB. See `docs/the-community-shaders-compiler-war.md` |
+| Launcher: "N mod files don't match" **and** "Revision N required · you have M" at the same time | two gates. The revision number is the running launcher asar. The named esps are bytes ≠ the server pin, usually because the installed collection is the old revision | Restart the launcher once so the pending updater can install (only when the banner says the update is ready — a mid-download restart installs a partial setup). Then update the collection to that revision in the manager that already owns it. Do not install a second manager on the same Data folder. Do not Play Anyway |
 | Red diamond placeholder on NPCs (esp. male hold guards), EngineFixes.log silent | case-twin mesh dirs — `1_Nordwar` vs `1_NordWar`-style pairs where Wine exact-matches one variant and the other's unique files (male meshes) are invisible; some male meshes only ever existed inside the mod archive | `python3 scripts/merge-mesh-case-twins.py --data <Data> --merge SRC DST ...` folds the pairs; `--import <7z-extract>` fills never-deployed meshes. 503 → 2 missing refs (the 2 = dead refs for uninstalled hood mod). See `docs/the-case-twin-merge.md` |
 | Crash ~3 s after launch in `OpenAnimationReplacer.dll` `UIHooks::CreateD3D11`, DXVK config strings on stack, right after running mesh fixes | launching raced the merge mid-flight (files moving under a starting wineserver) — NOT the merge itself; meshes don't load at 3 s | relaunch after the merge finishes; to exonerate any data change, boot standalone: `timeout 75 umu-run skse64_loader.exe` with the launcher env (recipe in `docs/the-case-twin-merge.md` postscript) |
 | Vortex red banner: "No deployment method available", fixes greyed out | Vortex can write nothing into the game dir — exfat/ntfs mount, root-owned library, read-only mount, Flatpak sandbox, or the linux-vortex AppImage drive-probe bug on non-standard mountpoints | triage tree in **Mod manager lanes** above; reason text lives in Vortex's notification bell |
-| Launcher: "N required mods missing" after Vortex says all deployed | Vortex deployed to the **Steam** Skyrim Data, not the umu prefix's copy | `rsync -a "<steam Skyrim>/Data/" "<prefix game dir>/Data/"` — re-run after every Vortex deploy (see **Mod manager lanes**) |
+| Launcher: "N required mods missing" after the manager says all deployed | manager deployed to the **Steam** Skyrim Data, not the umu prefix's copy — or Amethyst was on **VFS** deploy, which never writes Data | hardlink/symlink deploy (never VFS), then the rsync bridge. Re-run after every deploy |
+| Amethyst deployed, then red diamonds / a crash a few seconds in, or `skse64_loader.exe` missing | case-alias symlinks copied into the prefix, or Amethyst renamed SKSE onto the Bethesda launcher | case-alias off, hardlink deploy, rsync `Data/` only, copy `skse64_loader.exe` back if the name is gone. See Lane D |
+| Launcher: "Revision N required · you have M" | Nexus collection `ptmvzi` moved. The number you "have" is the revision baked into the running launcher asar, not Vortex. New work is the `(modId, fileId)` delta between the two collection packs | Diff the packs, download only the new pins (slow-download + nxm if not Premium), honour `choices`, Deploy, rsync, enable the new plugins. The banner clears when the launcher updater finishes and the launcher is closed. See `docs/the-collection-revision-bump.md` |
+| Discord: update the launcher from the website, or the in-app update never finishes | the site installer is the announced build; a stalled `pending/temp-DaedricOnline-Setup-*.exe` (size short of `latest.yml`, not growing) will install as a partial if the window closes normally | Do not run the NSIS setup. Verify the site exe against `latest.yml`, SIGKILL by PID, delete the partial, 7z-extract `app-64.7z` over `Program Files/DaedricOnline`, relaunch. See `docs/the-launcher-website-update.md` |
 
 ## Operational safety rules (learned the hard way)
 
 1. **Never hand-modify the game folder.** The launcher gates on a foreign-file
-   list and on `SkyrimSE.exe` size 37157144. Vortex handles the mods. The two
+   list and on `SkyrimSE.exe` size 37157144. The mod manager handles the mods. The two
    sanctioned exceptions: the Step 7 console install (re-arms the exact
    vanilla 1.6.1170 files the launcher checks for), and the mod-verification
    gate (hash-verified replacement of canonically-pinned esp files — read
    `docs/the-mod-verification-gate.md` first).
-2. **Never run distro wine against a umu prefix.** Always `umu-run` with the
-   same `PROTONPATH`/env the prefix was created under.
+2. **Never run distro wine against a umu prefix.** On a normal `/home` distro,
+   always `umu-run` with the same `PROTONPATH`/env the prefix was created
+   under. On Fedora Atomic the working launch is Steam's Proton via the
+   non-Steam shortcut (**Fedora Atomic / Bazzite**), still GE-Proton11-7 —
+   not distro wine.
 3. **Never `pkill -f` a string that appears in your own command line.** Use
    chunked kill lists with explicit PIDs.
 4. **Never click "INSTALL THE COLLECTION" / "GET MODS"** in the launcher — it
-   would overwrite the Vortex install.
-5. **Never click "RESTART" (update banner)** — it force-runs the updater and
-   can race the running instance.
+   overwrites the mod-manager install (Vortex or Amethyst).
+5. **Never click "RESTART" while the launcher update is still downloading.**
+   That installs a partial setup. When the banner says the update is **ready**,
+   quit fully and start the launcher once. Do not leave the old process up
+   and launch a second copy. If Discord says update from the website, or the
+   pending exe has stopped short of the `latest.yml` size, do not close
+   normally either — SIGKILL, delete the partial, and extract the site
+   installer (`docs/the-launcher-website-update.md`).
 6. **Never let the launcher "repair" or re-download vanilla data** — its own
    depot downloader corrupts LZ4 DDS blocks (`~/Downloads/daedric-dl/`); the
    "repair" re-copies the corruption. The Step 7 console install (or Steam
    Verify if the build is already correct) is the only sanctioned
    vanilla-data repair.
-7. **Never launch the game via the Steam client, never click Verify Integrity,
-   after a downgrade** — both re-pull 1.7.104 and slam the version gate shut.
+7. **Never launch Skyrim via its Steam library entry, never click Verify
+   Integrity, after a downgrade** — both re-pull 1.7.104 and slam the version
+   gate shut. The Fedora Atomic exception is a non-Steam shortcut pointed at
+   `Daedric Online.exe`, not at `SkyrimSE.exe`. Playing the Skyrim app from
+   Steam is still forbidden.
 
 ## File map
 
@@ -499,6 +702,9 @@ this repo) is the hardened v4:
 | `~/.local/share/Steam/steamapps/appmanifest_489830.acf` | `AutoUpdateBehavior=2` — the version-hold that stops Steam re-updating |
 | `docs/the-missing-texture-board.md` | the layer-3 board: staged-never-deployed rescue, mask rescue, `metalic_e` cubemap chain of custody, phase-4 mesh-side case war, phase-5 vanilla-master front (crash fix), phase-5.1 actor-tree rollback (head-build regression), sealed-gap families |
 | `docs/the-option-reinstall-list.md` | installer-option mods to reinstall via Vortex + field log of the rescue rounds |
+| `docs/the-collection-revision-bump.md` | "Revision N required · you have M": diff the collection packs, free-account download, FOMOD pins, rsync, and what not to delete |
+| `docs/the-launcher-website-update.md` | Discord "update from the website": verify the site exe against `latest.yml`, never run the NSIS setup, SIGKILL a stalled partial, 7z-extract the app tree |
+| `docs/the-atomic-steam-bridge.md` | Fedora Atomic / Bazzite: `umu-run` leaves `steam_install_path` empty when home is `/var/home`; non-Steam shortcut under GE-Proton11-7 |
 | `docs/the-community-shaders-compiler-war.md` | the KW_NAMESPACE massacre: Wine's stub `d3dcompiler_47.dll` vs CS runtime shader compilation — native DLL deploy + override fix |
 | `docs/the-case-twin-merge.md` | phase 6: split-case mesh dirs (`1_Nordwar`/`1_NordWar`) hide files from Wine's exact-match lookup → red diamonds; the merge tool, archive import, newer-wins conflict rule |
 | `scripts/merge-mesh-case-twins.py` | merge case-twin mesh dirs + import extracted archives with CI dir resolution; dry-run default, idempotent, re-run after any sync/deploy |
@@ -512,8 +718,15 @@ this repo) is the hardened v4:
   validated live.
 - Launcher migrated plain-wine → umu prefix so the spawned game inherits the
   GE wineserver + Steam bridge.
+- Website launcher update (2026-10-01): 1.3.60 → 1.3.79 by extracting the
+  site NSIS payload after the in-app pending file stalled at 41 MB of 88 MB.
+  A normal close would have installed the partial. Procedure:
+  `docs/the-launcher-website-update.md`.
 - `UMU_USE_STEAM=1` identified as the bridge fix after `+seh` tracing showed
-  the exact S_API load failure.
+  the exact S_API load failure. On Fedora Atomic that variable is not enough:
+  home at `/var/home` leaves `steam_install_path` empty (field report, umu
+  1.4.4, GE-Proton11-7, native Steam). Non-Steam shortcut workaround:
+  `docs/the-atomic-steam-bridge.md`.
 - Resolution forced to native ultrawide 2560x1080 fullscreen.
 - 1.6.1170 version gate: Steam's Aug-2026 auto-update (1.7.104) broke the
   launcher's `REQUIRED_RUNTIME = "1.6.1170"` check. The launcher's own client

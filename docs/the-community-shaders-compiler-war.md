@@ -99,3 +99,16 @@ Later boots reuse the disk cache and load fast.
 - **Check the game's own redist folders first.** `RuntimeDependencies/` in
   the vanilla install shipped exactly the DLL we needed — no winetricks
   download, no version roulette.
+- **The on-screen error is `N shaders failed to compile`, not a hang.**
+  Hundreds failed in the first seconds means the stub compiler already
+  rejected them. Press Escape. Waiting will not finish that set. Leave the
+  launcher's Community Shaders toggle off until both DLL copies are ~4.9 MB
+  and the launch script has `d3dcompiler_47=n,b`.
+- **Bazzite paths.** `$HOME` works (`/var/home/<user>`). Do not quote `~`.
+  Native Steam is `$HOME/.local/share/Steam`. Flatpak Steam nests under
+  `$HOME/.var/app/com.valvesoftware.Steam`. Find the trees before copying:
+
+  ```bash
+  find "$HOME" /var/mnt /run/media -maxdepth 8 -type d -iname "Skyrim Special Edition" 2>/dev/null
+  find "$HOME" -maxdepth 6 -type d -name umu-489830 2>/dev/null
+  ```

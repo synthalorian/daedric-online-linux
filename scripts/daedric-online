@@ -28,6 +28,12 @@
 #  dies silently. UMU_USE_STEAM=1 keeps lsteamclient enabled and routes
 #  through GE's builtin steam.exe shim: "[S_API] Loaded steamclient64.dll OK".
 #  See repo README for the full writeup.
+#
+#  Fedora Atomic (Bazzite, home at /var/home): this script will open the
+#  launcher and never spawn Skyrim (steam_install_path empty). Do not debug
+#  UMU_USE_STEAM here. Add Daedric Online.exe as a Steam non-Steam game,
+#  force GE-Proton11-7, launch option: %command% --no-sandbox.
+#  docs/the-atomic-steam-bridge.md
 set -u
 
 PREFIX="$HOME/Games/umu/umu-489830"
